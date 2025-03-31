@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from "react";
 import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
@@ -28,24 +29,32 @@ function App() {
   const location = useLocation();
   const { toast } = useToast();
 
+  // Function to load data based on the active backend
   const loadData = useCallback(async () => {
     setIsLoading(true);
     
     try {
+      // Check backend connection first
       const connectionStatus = await checkBackendConnection();
       console.log(`Backend connection status: ${connectionStatus.connected ? "Connected" : "Disconnected"} to ${connectionStatus.provider}`);
       
+      // If we should use local storage (either configured or as fallback)
       if (shouldUseFallbackStorage() || ACTIVE_BACKEND === BACKEND_PROVIDER.LOCAL) {
         console.log("Loading from local storage");
+        // Load from localStorage
         const localData = localStorage.getData();
         setClients(localData.clients || []);
         setServes(localData.serves || []);
       } 
+      // If Appwrite is the active backend and we're connected
       else if (ACTIVE_BACKEND === BACKEND_PROVIDER.APPWRITE && connectionStatus.connected) {
         console.log("Loading data from Appwrite instead of local storage");
         
         try {
+          // Get clients from Appwrite
           const appwriteClients = await appwrite.getClients();
+          
+          // Get serve attempts from Appwrite
           const appwriteServes = await appwrite.getServeAttempts();
           
           console.log(`Loaded ${appwriteClients.length} clients and ${appwriteServes.length} serve attempts from Appwrite`);
@@ -53,6 +62,7 @@ function App() {
           setClients(appwriteClients);
           setServes(appwriteServes);
           
+          // Update local storage as backup
           localStorage.saveData({
             clients: appwriteClients,
             serves: appwriteServes
@@ -60,15 +70,20 @@ function App() {
         } catch (error) {
           console.error("Error fetching data from Appwrite:", error);
           
+          // Fallback to local storage
           console.log("Falling back to local storage due to error");
           const localData = localStorage.getData();
           setClients(localData.clients || []);
           setServes(localData.serves || []);
           
+          // Mark for fallback mode
           window.localStorage.setItem('useLocalStorageFallback', 'true');
         }
       } 
+      // If Supabase is the active backend
       else if (ACTIVE_BACKEND === BACKEND_PROVIDER.SUPABASE) {
+        // Supabase loading logic would go here
+        // We're no longer supporting Supabase in this app version
         console.log("Supabase is no longer the primary backend, falling back to local storage");
         const localData = localStorage.getData();
         setClients(localData.clients || []);
@@ -77,6 +92,7 @@ function App() {
     } catch (error) {
       console.error("Error loading data:", error);
       
+      // Final fallback - use whatever might be in local storage
       const localData = localStorage.getData();
       setClients(localData.clients || []);
       setServes(localData.serves || []);
@@ -85,9 +101,11 @@ function App() {
     }
   }, []);
 
+  // Load data on initial load
   useEffect(() => {
     loadData();
     
+    // Set up periodic sync with backend every 5 seconds
     const syncInterval = setInterval(() => {
       console.log("Running periodic sync with Appwrite...");
       loadData();
@@ -96,13 +114,18 @@ function App() {
     return () => clearInterval(syncInterval);
   }, [loadData]);
 
-  const addClient = async (client: ClientData): Promise<boolean> => {
+  // Add a new client
+  const addClient = async (client: ClientData) => {
     try {
       const newClient = { ...client, id: client.id || `client-${uuidv4()}` };
       
+      // If using Appwrite and connected
       if (ACTIVE_BACKEND === BACKEND_PROVIDER.APPWRITE && !shouldUseFallbackStorage()) {
         try {
+          // Save to Appwrite
           await appwrite.createClient(newClient);
+          
+          // Reload all data to ensure we're in sync
           await loadData();
           
           toast({
@@ -114,6 +137,7 @@ function App() {
         } catch (error) {
           console.error("Error saving client to Appwrite:", error);
           
+          // Fall back to local storage
           localStorage.addClient(newClient);
           setClients([...clients, newClient]);
           
@@ -126,6 +150,7 @@ function App() {
           return true;
         }
       } else {
+        // Save to local storage
         localStorage.addClient(newClient);
         setClients([...clients, newClient]);
         
@@ -149,15 +174,21 @@ function App() {
     }
   };
 
-  const updateClient = async (updatedClient: ClientData): Promise<boolean> => {
+  // Update an existing client
+  const updateClient = async (updatedClient: ClientData) => {
     try {
+      // Ensure client has an ID
       if (!updatedClient.id) {
         throw new Error("Client ID is missing");
       }
       
+      // If using Appwrite and connected
       if (ACTIVE_BACKEND === BACKEND_PROVIDER.APPWRITE && !shouldUseFallbackStorage()) {
         try {
+          // Update in Appwrite
           await appwrite.updateClient(updatedClient);
+          
+          // Reload all data to ensure we're in sync
           await loadData();
           
           toast({
@@ -169,6 +200,7 @@ function App() {
         } catch (error) {
           console.error("Error updating client in Appwrite:", error);
           
+          // Fall back to local storage
           localStorage.updateClient(updatedClient);
           setClients(clients.map(c => c.id === updatedClient.id ? updatedClient : c));
           
@@ -181,6 +213,7 @@ function App() {
           return true;
         }
       } else {
+        // Update in local storage
         localStorage.updateClient(updatedClient);
         setClients(clients.map(c => c.id === updatedClient.id ? updatedClient : c));
         
@@ -204,17 +237,23 @@ function App() {
     }
   };
 
-  const addServe = async (serve: ServeAttemptData): Promise<boolean> => {
+  // Add a new serve attempt
+  const addServe = async (serve: ServeAttemptData) => {
     try {
-      const newServe: ServeAttemptData = {
+      // Generate ID if not provided
+      const newServe = { 
         ...serve,
         id: serve.id || `serve-${uuidv4()}`,
-        timestamp: serve.timestamp || new Date(),
+        timestamp: serve.timestamp || new Date().toISOString()
       };
       
+      // If using Appwrite and connected
       if (ACTIVE_BACKEND === BACKEND_PROVIDER.APPWRITE && !shouldUseFallbackStorage()) {
         try {
+          // Save to Appwrite
           await appwrite.createServeAttempt(newServe);
+          
+          // Reload all data to ensure we're in sync
           await loadData();
           
           toast({
@@ -226,6 +265,7 @@ function App() {
         } catch (error) {
           console.error("Error saving serve to Appwrite:", error);
           
+          // Fall back to local storage
           localStorage.addServe(newServe);
           setServes([...serves, newServe]);
           
@@ -238,6 +278,7 @@ function App() {
           return true;
         }
       } else {
+        // Save to local storage
         localStorage.addServe(newServe);
         setServes([...serves, newServe]);
         
@@ -261,11 +302,16 @@ function App() {
     }
   };
 
-  const deleteServe = async (id: string): Promise<boolean> => {
+  // Delete a serve attempt
+  const deleteServe = async (id: string) => {
     try {
+      // If using Appwrite and connected
       if (ACTIVE_BACKEND === BACKEND_PROVIDER.APPWRITE && !shouldUseFallbackStorage()) {
         try {
+          // Delete from Appwrite
           await appwrite.deleteServeAttempt(id);
+          
+          // Reload all data to ensure we're in sync
           await loadData();
           
           toast({
@@ -277,6 +323,7 @@ function App() {
         } catch (error) {
           console.error("Error deleting serve from Appwrite:", error);
           
+          // Fall back to local storage
           localStorage.deleteServe(id);
           setServes(serves.filter(s => s.id !== id));
           
@@ -289,6 +336,7 @@ function App() {
           return true;
         }
       } else {
+        // Delete from local storage
         localStorage.deleteServe(id);
         setServes(serves.filter(s => s.id !== id));
         
@@ -312,15 +360,21 @@ function App() {
     }
   };
 
-  const updateServe = async (updatedServe: ServeAttemptData): Promise<boolean> => {
+  // Update an existing serve attempt
+  const updateServe = async (updatedServe: ServeAttemptData) => {
     try {
+      // Ensure serve has an ID
       if (!updatedServe.id) {
         throw new Error("Serve ID is missing");
       }
       
+      // If using Appwrite and connected
       if (ACTIVE_BACKEND === BACKEND_PROVIDER.APPWRITE && !shouldUseFallbackStorage()) {
         try {
+          // Update in Appwrite
           await appwrite.updateServeAttempt(updatedServe);
+          
+          // Reload all data to ensure we're in sync
           await loadData();
           
           toast({
@@ -332,6 +386,7 @@ function App() {
         } catch (error) {
           console.error("Error updating serve in Appwrite:", error);
           
+          // Fall back to local storage
           localStorage.updateServe(updatedServe);
           setServes(serves.map(s => s.id === updatedServe.id ? updatedServe : s));
           
@@ -344,6 +399,7 @@ function App() {
           return true;
         }
       } else {
+        // Update in local storage
         localStorage.updateServe(updatedServe);
         setServes(serves.map(s => s.id === updatedServe.id ? updatedServe : s));
         
@@ -367,10 +423,12 @@ function App() {
     }
   };
 
+  // Handle navigation to new serve attempt for specific client and case
   const handleNewAttempt = (clientId: string, caseNumber: string, previousAttempts: number) => {
     navigate(`/new-serve?clientId=${clientId}&caseNumber=${caseNumber}`);
   };
 
+  // Add utility to create localStorage.ts file for local storage operations:
   return (
     <>
       <Toaster position="bottom-right" />
@@ -390,7 +448,7 @@ function App() {
             element={
               <Clients 
                 clients={clients} 
-                onSelectClient={(id) => navigate(`/clients/${id}`)} 
+                setSelectedClient={(id) => navigate(`/clients/${id}`)} 
               />
             } 
           />
