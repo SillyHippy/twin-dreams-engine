@@ -17,7 +17,6 @@ export const checkBackendConnection = async () => {
       // If we get here, we're connected
       // Reset any fallback flags
       window.localStorage.removeItem('useLocalStorageFallback');
-      window.localStorage.removeItem('connectionErrorShown');
       return { connected: true, provider: 'Appwrite' };
     } catch (error) {
       console.error("Appwrite connection check failed:", error);
@@ -34,7 +33,7 @@ export const checkBackendConnection = async () => {
       
       return { connected: false, provider: 'Appwrite', error };
     }
-  } else if (ACTIVE_BACKEND === BACKEND_PROVIDER.SUPABASE) {
+  } else {
     try {
       const { data, error } = await supabase.from('clients').select('id').limit(1);
       if (error) throw error;
@@ -43,9 +42,6 @@ export const checkBackendConnection = async () => {
       console.error("Supabase connection check failed:", error);
       return { connected: false, provider: 'Supabase', error };
     }
-  } else {
-    // Local storage mode
-    return { connected: true, provider: 'Local' };
   }
 };
 
@@ -60,11 +56,10 @@ export const switchBackend = (targetBackend: string) => {
 
 // Helper to get displayable backend information
 export const getBackendInfo = () => {
-  const backendName = isUsingAppwrite() ? "Appwrite" : (ACTIVE_BACKEND === BACKEND_PROVIDER.LOCAL ? "Local Storage" : "Supabase");
   return {
-    name: backendName,
-    icon: isUsingAppwrite() ? "⚡" : (ACTIVE_BACKEND === BACKEND_PROVIDER.LOCAL ? "💾" : "⚡️"),
-    color: isUsingAppwrite() ? "bg-indigo-500" : (ACTIVE_BACKEND === BACKEND_PROVIDER.LOCAL ? "bg-gray-500" : "bg-emerald-500")
+    name: isUsingAppwrite() ? "Appwrite" : "Supabase",
+    icon: isUsingAppwrite() ? "⚡" : "⚡️",
+    color: isUsingAppwrite() ? "bg-indigo-500" : "bg-emerald-500"
   };
 };
 

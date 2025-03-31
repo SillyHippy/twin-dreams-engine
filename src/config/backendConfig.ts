@@ -49,5 +49,5 @@ export const shouldUseFallbackStorage = () => {
     // We'll check for connection errors elsewhere and use this flag
     return window.localStorage.getItem('useLocalStorageFallback') === 'true';
   }
-  return ACTIVE_BACKEND === BACKEND_PROVIDER.LOCAL;
+  return false;
 };

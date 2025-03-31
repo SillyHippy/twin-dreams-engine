@@ -1,538 +1,838 @@
 
-import { useState, useEffect, useCallback } from "react";
-import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
-import { Toaster } from "sonner";
+import React, { useState, useEffect } from "react";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Routes, Route, useLocation, useNavigate, Navigate } from "react-router-dom";
+import { TransitionGroup, CSSTransition } from "react-transition-group";
+import NotFound from "./pages/NotFound";
 import Dashboard from "./pages/Dashboard";
+import NewServe from "./pages/NewServe";
+import DataExport from "./pages/DataExport";
 import Clients from "./pages/Clients";
-import ClientDetail from "./pages/ClientDetail";
 import History from "./pages/History";
 import Layout from "./components/Layout";
-import NewClient from "./pages/NewClient";
-import EditClient from "./pages/EditClient";
-import NewServe from "./pages/NewServe";
 import { ClientData } from "./components/ClientForm";
 import { ServeAttemptData } from "./components/ServeAttempt";
-import { v4 as uuidv4 } from "uuid";
-import Export from "./pages/Export";
-import Settings from "./pages/Settings";
-import { checkBackendConnection } from "./utils/backendHelpers";
-import { ACTIVE_BACKEND, BACKEND_PROVIDER, shouldUseFallbackStorage } from "./config/backendConfig";
+import { 
+  supabase, 
+  setupRealtimeSubscription, 
+  syncLocalServesToSupabase, 
+  syncSupabaseServesToLocal,
+  deleteServeAttempt,
+  updateServeAttempt
+} from "./lib/supabase";
 import { appwrite } from "./lib/appwrite";
-import * as localStorage from "./utils/localStorage";
-import { useToast } from "@/hooks/use-toast";
+import { 
+  checkAppwriteConnection, 
+  loadDataFromAppwrite,
+  clearLocalStorage,
+  getActiveBackend
+} from "./utils/dataSwitch";
+import { BACKEND_PROVIDER } from "./config/backendConfig";
+import { toast } from "@/hooks/use-toast";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 
-function App() {
-  const [clients, setClients] = useState<ClientData[]>([]);
-  const [serves, setServes] = useState<ServeAttemptData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { toast } = useToast();
-
-  // Function to load data based on the active backend
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
-    
-    try {
-      // Check backend connection first
-      const connectionStatus = await checkBackendConnection();
-      console.log(`Backend connection status: ${connectionStatus.connected ? "Connected" : "Disconnected"} to ${connectionStatus.provider}`);
-      
-      // If we should use local storage (either configured or as fallback)
-      if (shouldUseFallbackStorage() || ACTIVE_BACKEND === BACKEND_PROVIDER.LOCAL) {
-        console.log("Loading from local storage");
-        // Load from localStorage
-        const localData = localStorage.getData();
-        setClients(localData.clients || []);
-        setServes(localData.serves || []);
-      } 
-      // If Appwrite is the active backend and we're connected
-      else if (ACTIVE_BACKEND === BACKEND_PROVIDER.APPWRITE && connectionStatus.connected) {
-        console.log("Loading data from Appwrite instead of local storage");
-        
-        try {
-          // Get clients from Appwrite
-          const appwriteClients = await appwrite.getClients();
-          
-          // Get serve attempts from Appwrite
-          const appwriteServes = await appwrite.getServeAttempts();
-          
-          console.log(`Loaded ${appwriteClients.length} clients and ${appwriteServes.length} serve attempts from Appwrite`);
-          
-          setClients(appwriteClients);
-          setServes(appwriteServes);
-          
-          // Update local storage as backup
-          localStorage.saveData({
-            clients: appwriteClients,
-            serves: appwriteServes
-          });
-        } catch (error) {
-          console.error("Error fetching data from Appwrite:", error);
-          
-          // Fallback to local storage
-          console.log("Falling back to local storage due to error");
-          const localData = localStorage.getData();
-          setClients(localData.clients || []);
-          setServes(localData.serves || []);
-          
-          // Mark for fallback mode
-          window.localStorage.setItem('useLocalStorageFallback', 'true');
-        }
-      } 
-      // If Supabase is the active backend
-      else if (ACTIVE_BACKEND === BACKEND_PROVIDER.SUPABASE) {
-        // Supabase loading logic would go here
-        // We're no longer supporting Supabase in this app version
-        console.log("Supabase is no longer the primary backend, falling back to local storage");
-        const localData = localStorage.getData();
-        setClients(localData.clients || []);
-        setServes(localData.serves || []);
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+      staleTime: 5000,
+    },
+    mutations: {
+      onError: (error) => {
+        console.error("Mutation error:", error);
       }
-    } catch (error) {
-      console.error("Error loading data:", error);
-      
-      // Final fallback - use whatever might be in local storage
-      const localData = localStorage.getData();
-      setClients(localData.clients || []);
-      setServes(localData.serves || []);
-    } finally {
-      setIsLoading(false);
     }
+  }
+});
+
+const AnimatedRoutes = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  const [clients, setClients] = useState<ClientData[]>(() => {
+    const savedClients = localStorage.getItem("serve-tracker-clients");
+    return savedClients ? JSON.parse(savedClients) : [];
+  });
+  
+  const [serves, setServes] = useState<ServeAttemptData[]>(() => {
+    const savedServes = localStorage.getItem("serve-tracker-serves");
+    console.log("Initial load from localStorage serve-tracker-serves:", 
+      savedServes ? JSON.parse(savedServes).length : 0, "entries");
+    return savedServes ? JSON.parse(savedServes) : [];
+  });
+
+  const [isInitialSync, setIsInitialSync] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const [usingAppwrite, setUsingAppwrite] = useState(getActiveBackend() === BACKEND_PROVIDER.APPWRITE);
+  const [showAppwriteAlert, setShowAppwriteAlert] = useState(false);
+
+  // Check selected backend connection on mount
+  useEffect(() => {
+    const checkBackend = async () => {
+      const activeBackend = getActiveBackend();
+      
+      if (activeBackend === BACKEND_PROVIDER.APPWRITE) {
+        const isAppwriteConnected = await checkAppwriteConnection();
+        setUsingAppwrite(isAppwriteConnected);
+        
+        if (isAppwriteConnected) {
+          console.log("Using Appwrite as primary backend");
+          
+          // Set up Appwrite real-time subscription
+          const cleanup = appwrite.setupRealtimeSubscription((response) => {
+            console.log("Received real-time update from Appwrite:", response);
+            // Refresh data when changes happen
+            loadAppwriteData();
+          });
+          
+          return cleanup;
+        } else {
+          console.log("Failed to connect to Appwrite, falling back to Supabase");
+          setShowAppwriteAlert(true);
+          return setupRealtimeSubscription();
+        }
+      } else {
+        console.log("Using Supabase as primary backend");
+        setUsingAppwrite(false);
+        return setupRealtimeSubscription();
+      }
+    };
+    
+    checkBackend();
   }, []);
 
-  // Load data on initial load
+  const loadAppwriteData = async () => {
+    try {
+      setIsSyncing(true);
+      const { clients: appwriteClients, serves: appwriteServes } = await loadDataFromAppwrite();
+      
+      if (appwriteClients.length > 0) {
+        setClients(appwriteClients);
+        localStorage.setItem("serve-tracker-clients", JSON.stringify(appwriteClients));
+      }
+      
+      if (appwriteServes.length > 0) {
+        setServes(appwriteServes);
+        localStorage.setItem("serve-tracker-serves", JSON.stringify(appwriteServes));
+      }
+      
+      setDataLoaded(true);
+    } catch (error) {
+      console.error("Error loading data from Appwrite:", error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   useEffect(() => {
-    loadData();
+    const performInitialSync = async () => {
+      if (isInitialSync) {
+        setIsSyncing(true);
+        try {
+          if (usingAppwrite) {
+            console.log("Performing initial sync from Appwrite");
+            await loadAppwriteData();
+          } else {
+            console.log("Performing initial sync from Supabase to local storage");
+            await fetchClients();
+            const supabaseServes = await syncSupabaseServesToLocal();
+            
+            if (supabaseServes && supabaseServes.length > 0) {
+              setServes(supabaseServes);
+              console.log(`Synced ${supabaseServes.length} serves from Supabase`);
+            } else {
+              setServes([]);
+              localStorage.setItem("serve-tracker-serves", JSON.stringify([]));
+              console.log("No serves in Supabase, cleared local storage");
+            }
+          }
+          
+          setIsInitialSync(false);
+          setDataLoaded(true);
+        } catch (error) {
+          console.error("Error during initial sync:", error);
+          console.log("Failed to sync with database. Will retry automatically");
+          
+          setDataLoaded(true);
+        } finally {
+          setIsSyncing(false);
+        }
+      }
+    };
     
-    // Set up periodic sync with backend every 5 seconds
-    const syncInterval = setInterval(() => {
-      console.log("Running periodic sync with Appwrite...");
-      loadData();
-    }, 5000);
-    
-    return () => clearInterval(syncInterval);
-  }, [loadData]);
+    performInitialSync();
+  }, [isInitialSync, usingAppwrite]);
 
-  // Add a new client
+  useEffect(() => {
+    if (!usingAppwrite) {
+      // Only set up Supabase sync interval if we're not using Appwrite
+      const syncInterval = setInterval(async () => {
+        try {
+          console.log("Running periodic sync with Supabase...");
+          const supabaseServes = await syncSupabaseServesToLocal();
+          if (supabaseServes) {
+            setServes(supabaseServes);
+            console.log(`Periodic sync: updated with ${supabaseServes.length} serves from Supabase`);
+          }
+          
+          await fetchClients();
+        } catch (error) {
+          console.error("Error during periodic sync with Supabase:", error);
+        }
+      }, 5000);
+      
+      return () => {
+        clearInterval(syncInterval);
+      };
+    } else {
+      // Set up Appwrite sync interval
+      const syncInterval = setInterval(async () => {
+        try {
+          console.log("Running periodic sync with Appwrite...");
+          await loadAppwriteData();
+        } catch (error) {
+          console.error("Error during periodic sync with Appwrite:", error);
+        }
+      }, 5000);
+      
+      return () => {
+        clearInterval(syncInterval);
+      };
+    }
+  }, [usingAppwrite]);
+
+  useEffect(() => {
+    localStorage.setItem("serve-tracker-clients", JSON.stringify(clients));
+  }, [clients]);
+
+  useEffect(() => {
+    localStorage.setItem("serve-tracker-serves", JSON.stringify(serves));
+    console.log("Updated localStorage serve-tracker-serves:", serves.length, "entries");
+  }, [serves]);
+
+  const fetchClients = async () => {
+    if (usingAppwrite) {
+      return loadAppwriteData();
+    }
+    
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('*');
+          
+      if (error) {
+        throw error;
+      }
+      
+      if (data && data.length > 0) {
+        localStorage.setItem("serve-tracker-clients", JSON.stringify(data));
+        setClients(data);
+        console.log(`Loaded ${data.length} clients from Supabase`);
+      } else {
+        localStorage.setItem("serve-tracker-clients", JSON.stringify([]));
+        setClients([]);
+        console.log("No clients in Supabase, cleared local storage");
+      }
+      
+      return data;
+    } catch (error) {
+      console.error("Error fetching clients from Supabase:", error);
+      return null;
+    }
+  };
+
   const addClient = async (client: ClientData) => {
-    try {
-      const newClient = { ...client, id: client.id || `client-${uuidv4()}` };
-      
-      // If using Appwrite and connected
-      if (ACTIVE_BACKEND === BACKEND_PROVIDER.APPWRITE && !shouldUseFallbackStorage()) {
-        try {
-          // Save to Appwrite
-          await appwrite.createClient(newClient);
-          
-          // Reload all data to ensure we're in sync
-          await loadData();
-          
-          toast({
-            title: "Client added successfully",
-            description: "New client has been created"
-          });
-          
-          return true;
-        } catch (error) {
-          console.error("Error saving client to Appwrite:", error);
-          
-          // Fall back to local storage
-          localStorage.addClient(newClient);
-          setClients([...clients, newClient]);
-          
-          toast({
-            title: "Client saved locally",
-            description: "Connection to Appwrite failed, saved to local storage",
-            variant: "destructive"
-          });
-          
-          return true;
-        }
-      } else {
-        // Save to local storage
-        localStorage.addClient(newClient);
-        setClients([...clients, newClient]);
-        
-        toast({
-          title: "Client added successfully",
-          description: "New client has been created"
+    if (usingAppwrite) {
+      try {
+        console.log("Adding client to Appwrite:", client);
+        const newClient = await appwrite.createClient({
+          ...client,
+          id: client.id || `client-${Date.now()}`,
+          additionalEmails: client.additionalEmails || []
         });
         
-        return true;
-      }
-    } catch (error) {
-      console.error("Error adding client:", error);
-      
-      toast({
-        title: "Error adding client",
-        description: "Failed to add client",
-        variant: "destructive"
-      });
-      
-      return false;
-    }
-  };
-
-  // Update an existing client
-  const updateClient = async (updatedClient: ClientData) => {
-    try {
-      // Ensure client has an ID
-      if (!updatedClient.id) {
-        throw new Error("Client ID is missing");
-      }
-      
-      // If using Appwrite and connected
-      if (ACTIVE_BACKEND === BACKEND_PROVIDER.APPWRITE && !shouldUseFallbackStorage()) {
-        try {
-          // Update in Appwrite
-          await appwrite.updateClient(updatedClient);
+        if (newClient) {
+          const clientForState = {
+            id: newClient.$id,
+            name: newClient.name,
+            email: newClient.email,
+            additionalEmails: newClient.additional_emails || [],
+            phone: newClient.phone,
+            address: newClient.address,
+            notes: newClient.notes
+          };
           
-          // Reload all data to ensure we're in sync
-          await loadData();
-          
-          toast({
-            title: "Client updated successfully",
-            description: "Client information has been updated"
+          setClients(prev => [clientForState, ...prev]);
+          toast.success("Client added", {
+            description: "Client has been successfully added to Appwrite"
           });
           
-          return true;
-        } catch (error) {
-          console.error("Error updating client in Appwrite:", error);
-          
-          // Fall back to local storage
-          localStorage.updateClient(updatedClient);
-          setClients(clients.map(c => c.id === updatedClient.id ? updatedClient : c));
-          
-          toast({
-            title: "Client saved locally",
-            description: "Connection to Appwrite failed, saved to local storage",
-            variant: "destructive"
-          });
-          
-          return true;
+          setTimeout(() => {
+            loadAppwriteData();
+          }, 500);
         }
-      } else {
-        // Update in local storage
-        localStorage.updateClient(updatedClient);
-        setClients(clients.map(c => c.id === updatedClient.id ? updatedClient : c));
-        
-        toast({
-          title: "Client updated successfully",
-          description: "Client information has been updated"
+      } catch (error) {
+        console.error("Error adding client to Appwrite:", error);
+        toast.error("Error adding client", {
+          description: error instanceof Error ? error.message : "Unknown error"
         });
-        
-        return true;
       }
-    } catch (error) {
-      console.error("Error updating client:", error);
-      
-      toast({
-        title: "Error updating client",
-        description: "Failed to update client",
-        variant: "destructive"
-      });
-      
-      return false;
+      return;
     }
-  };
-
-  // Add a new serve attempt
-  const addServe = async (serve: ServeAttemptData) => {
+    
     try {
-      // Generate ID if not provided
-      const newServe = { 
-        ...serve,
-        id: serve.id || `serve-${uuidv4()}`,
-        timestamp: serve.timestamp || new Date().toISOString()
+      // Check if client already exists
+      const { data: existingClient } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('id', client.id || `client-${Date.now()}`)
+        .single();
+        
+      const clientToSave = {
+        id: client.id || `client-${Date.now()}`,
+        name: client.name,
+        email: client.email,
+        additional_emails: client.additionalEmails || [],
+        phone: client.phone,
+        address: client.address,
+        notes: client.notes
       };
       
-      // If using Appwrite and connected
-      if (ACTIVE_BACKEND === BACKEND_PROVIDER.APPWRITE && !shouldUseFallbackStorage()) {
-        try {
-          // Save to Appwrite
-          await appwrite.createServeAttempt(newServe);
-          
-          // Reload all data to ensure we're in sync
-          await loadData();
-          
-          toast({
-            title: "Serve record created",
-            description: "New serve attempt has been recorded"
-          });
-          
-          return true;
-        } catch (error) {
-          console.error("Error saving serve to Appwrite:", error);
-          
-          // Fall back to local storage
-          localStorage.addServe(newServe);
-          setServes([...serves, newServe]);
-          
-          toast({
-            title: "Serve saved locally",
-            description: "Connection to Appwrite failed, saved to local storage",
-            variant: "destructive"
-          });
-          
-          return true;
-        }
-      } else {
-        // Save to local storage
-        localStorage.addServe(newServe);
-        setServes([...serves, newServe]);
+      const { error } = await supabase
+        .from('clients')
+        .insert(clientToSave);
         
-        toast({
-          title: "Serve record created",
-          description: "New serve attempt has been recorded"
-        });
-        
-        return true;
-      }
+      if (error) {
+        console.error("Error saving client to Supabase:", error);
+        console.log("Failed to save client to database:", error.message);
+        return;
+      } 
+      
+      console.log("Successfully saved client to Supabase:", clientToSave);
+      console.log("Client saved successfully");
+      
+      const clientForState = {
+        ...client,
+        id: clientToSave.id
+      };
+      setClients(prev => [clientForState, ...prev]);
+      
+      setTimeout(() => {
+        fetchClients();
+      }, 500);
     } catch (error) {
-      console.error("Error adding serve:", error);
-      
-      toast({
-        title: "Error recording serve",
-        description: "Failed to record serve attempt",
-        variant: "destructive"
-      });
-      
-      return false;
+      console.error("Exception saving client:", error);
+      console.log("An unexpected error occurred");
     }
   };
 
-  // Delete a serve attempt
-  const deleteServe = async (id: string) => {
+  const updateClient = async (updatedClient: ClientData) => {
+    if (usingAppwrite) {
+      try {
+        console.log("Updating client in Appwrite:", updatedClient);
+        
+        const result = await appwrite.updateClient(updatedClient.id!, {
+          name: updatedClient.name,
+          email: updatedClient.email,
+          additional_emails: updatedClient.additionalEmails || [],
+          phone: updatedClient.phone,
+          address: updatedClient.address,
+          notes: updatedClient.notes
+        });
+        
+        if (result) {
+          setClients(prev => prev.map(client => 
+            client.id === updatedClient.id ? updatedClient : client
+          ));
+          
+          toast.success("Client updated", {
+            description: "Client has been successfully updated in Appwrite"
+          });
+          
+          setTimeout(() => {
+            loadAppwriteData();
+          }, 500);
+        }
+      } catch (error) {
+        console.error("Error updating client in Appwrite:", error);
+        toast.error("Error updating client", {
+          description: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
+      return;
+    }
+    
     try {
-      // If using Appwrite and connected
-      if (ACTIVE_BACKEND === BACKEND_PROVIDER.APPWRITE && !shouldUseFallbackStorage()) {
-        try {
-          // Delete from Appwrite
-          await appwrite.deleteServeAttempt(id);
-          
-          // Reload all data to ensure we're in sync
-          await loadData();
-          
-          toast({
-            title: "Serve record deleted",
-            description: "Serve attempt has been removed"
-          });
-          
-          return true;
-        } catch (error) {
-          console.error("Error deleting serve from Appwrite:", error);
-          
-          // Fall back to local storage
-          localStorage.deleteServe(id);
-          setServes(serves.filter(s => s.id !== id));
-          
-          toast({
-            title: "Serve deleted locally",
-            description: "Connection to Appwrite failed, deleted from local storage",
-            variant: "destructive"
-          });
-          
-          return true;
-        }
-      } else {
-        // Delete from local storage
-        localStorage.deleteServe(id);
-        setServes(serves.filter(s => s.id !== id));
+      console.log("Updating client with additional emails:", updatedClient.additionalEmails);
+      
+      const clientToUpdate = {
+        name: updatedClient.name,
+        email: updatedClient.email,
+        additional_emails: updatedClient.additionalEmails || [],
+        phone: updatedClient.phone,
+        address: updatedClient.address,
+        notes: updatedClient.notes
+      };
+      
+      const { error } = await supabase
+        .from('clients')
+        .update(clientToUpdate)
+        .eq('id', updatedClient.id);
         
-        toast({
-          title: "Serve record deleted",
-          description: "Serve attempt has been removed"
+      if (error) {
+        console.error("Error updating client in Supabase:", error);
+        console.log("Failed to update client in database:", error.message);
+        return;
+      }
+      
+      console.log("Successfully updated client in Supabase:", updatedClient);
+      console.log("Client updated successfully");
+      
+      setClients(prev => prev.map(client => 
+        client.id === updatedClient.id ? updatedClient : client
+      ));
+      
+      setTimeout(() => {
+        fetchClients();
+      }, 500);
+    } catch (error) {
+      console.error("Exception updating client:", error);
+      console.log("An unexpected error occurred");
+    }
+  };
+
+  const deleteClient = async (clientId: string) => {
+    if (usingAppwrite) {
+      try {
+        console.log("Deleting client from Appwrite:", clientId);
+        
+        // Delete associated serve attempts
+        const serveAttempts = await appwrite.getServeAttempts();
+        const clientServes = serveAttempts.filter(serve => serve.clientId === clientId);
+        
+        for (const serve of clientServes) {
+          await appwrite.deleteServeAttempt(serve.id);
+        }
+        
+        // Delete associated documents
+        const documents = await appwrite.getClientDocuments(clientId);
+        for (const doc of documents) {
+          await appwrite.deleteClientDocument(doc.id, doc.filePath);
+        }
+        
+        // Delete the client
+        await appwrite.deleteClient(clientId);
+        
+        setClients(prev => prev.filter(client => client.id !== clientId));
+        setServes(prev => prev.filter(serve => serve.clientId !== clientId));
+        
+        toast.success("Client deleted", {
+          description: "Client and associated data have been removed"
         });
         
+        setTimeout(() => {
+          loadAppwriteData();
+        }, 500);
+        
         return true;
+      } catch (error) {
+        console.error("Error deleting client from Appwrite:", error);
+        toast.error("Error deleting client", {
+          description: error instanceof Error ? error.message : "Unknown error"
+        });
+        return false;
       }
+    }
+    
+    try {
+      console.log("Deleting client with ID:", clientId);
+      
+      const { data: serveData, error: serveError } = await supabase
+        .from('serve_attempts')
+        .select('id')
+        .eq('client_id', clientId);
+
+      if (serveError) {
+        console.error("Error finding serve attempts for client:", serveError);
+      } else if (serveData && serveData.length > 0) {
+        console.log(`Found ${serveData.length} serve attempts to delete`);
+        for (const serve of serveData) {
+          await deleteServeAttempt(serve.id);
+        }
+        console.log("Successfully deleted client serve attempts");
+      }
+      
+      const { error: casesError } = await supabase
+        .from('client_cases')
+        .delete()
+        .eq('client_id', clientId);
+        
+      if (casesError) {
+        console.error("Error deleting client cases:", casesError);
+      } else {
+        console.log("Successfully deleted client cases");
+      }
+      
+      const { data: docsData, error: docsError } = await supabase
+        .from('client_documents')
+        .select('id, file_path')
+        .eq('client_id', clientId);
+        
+      if (docsError) {
+        console.error("Error finding client documents:", docsError);
+      } else if (docsData && docsData.length > 0) {
+        for (const doc of docsData) {
+          if (doc.file_path) {
+            await supabase.storage
+              .from('client-documents')
+              .remove([doc.file_path]);
+          }
+          
+          await supabase
+            .from('client_documents')
+            .delete()
+            .eq('id', doc.id);
+        }
+        console.log("Successfully deleted client documents");
+      }
+      
+      const { error } = await supabase
+        .from('clients')
+        .delete()
+        .eq('id', clientId);
+        
+      if (error) {
+        console.error("Error deleting client from Supabase:", error);
+        console.log("Failed to delete client from database:", error.message);
+        return false;
+      }
+      
+      const updatedClients = clients.filter(client => client.id !== clientId);
+      setClients(updatedClients);
+      
+      const updatedServes = serves.filter(serve => serve.clientId !== clientId);
+      setServes(updatedServes);
+      
+      setTimeout(async () => {
+        await fetchClients();
+        await syncSupabaseServesToLocal();
+      }, 500);
+      
+      console.log(`Removed client from state and localStorage. Remaining clients: ${updatedClients.length}`);
+      console.log("Client deleted successfully");
+      return true;
     } catch (error) {
-      console.error("Error deleting serve:", error);
-      
-      toast({
-        title: "Error deleting serve",
-        description: "Failed to delete serve attempt",
-        variant: "destructive"
-      });
-      
+      console.error("Error updating local state after client deletion:", error);
+      console.log("An unexpected error occurred");
       return false;
     }
   };
 
-  // Update an existing serve attempt
+  const addServe = async (serve: ServeAttemptData) => {
+    if (usingAppwrite) {
+      try {
+        console.log("Adding serve attempt to Appwrite:", serve);
+        
+        const newServe = await appwrite.createServeAttempt({
+          ...serve,
+          id: serve.id || `serve-${Date.now()}`
+        });
+        
+        if (newServe) {
+          setServes(prev => [newServe, ...prev]);
+          
+          toast.success("Serve attempt added", {
+            description: "Serve attempt has been recorded successfully"
+          });
+          
+          setTimeout(() => {
+            loadAppwriteData();
+          }, 500);
+          
+          navigate("/");
+        }
+      } catch (error) {
+        console.error("Error adding serve attempt to Appwrite:", error);
+        toast.error("Error adding serve attempt", {
+          description: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
+      return;
+    }
+    
+    console.log("Adding new serve:", serve);
+    const newServe = {
+      ...serve,
+      id: serve.id || `serve-${Date.now()}`,
+    };
+    
+    try {
+      const client = clients.find(c => c.id === serve.clientId);
+      
+      if (!client) {
+        console.error("Client not found for serve attempt");
+        console.log("Client not found");
+        return;
+      }
+      
+      const { data, error } = await supabase
+        .from('serve_attempts')
+        .insert({
+          id: newServe.id,
+          client_id: newServe.clientId,
+          case_number: newServe.caseNumber,
+          status: newServe.status,
+          notes: newServe.notes,
+          coordinates: newServe.coordinates,
+          timestamp: newServe.timestamp,
+          image_data: newServe.imageData,
+          attempt_number: newServe.attemptNumber
+        })
+        .select();
+      
+      if (error) {
+        console.error("Error saving serve attempt to Supabase:", error);
+        console.log("Failed to save serve attempt to database:", error.message);
+      } else {
+        console.log("Successfully saved serve attempt to Supabase:", data);
+        console.log("Serve attempt saved successfully");
+        
+        const supabaseServes = await syncSupabaseServesToLocal();
+        if (supabaseServes && supabaseServes.length > 0) {
+          setServes(supabaseServes);
+        } else {
+          setServes(prevServes => [newServe, ...prevServes]);
+        }
+        
+        navigate("/");
+      }
+    } catch (error) {
+      console.error("Exception saving serve attempt:", error);
+      console.log("An unexpected error occurred");
+      setServes(prevServes => [newServe, ...prevServes]);
+    }
+  };
+
   const updateServe = async (updatedServe: ServeAttemptData) => {
-    try {
-      // Ensure serve has an ID
-      if (!updatedServe.id) {
-        throw new Error("Serve ID is missing");
-      }
-      
-      // If using Appwrite and connected
-      if (ACTIVE_BACKEND === BACKEND_PROVIDER.APPWRITE && !shouldUseFallbackStorage()) {
-        try {
-          // Update in Appwrite
-          await appwrite.updateServeAttempt(updatedServe);
+    if (usingAppwrite) {
+      try {
+        console.log("Updating serve attempt in Appwrite:", updatedServe);
+        
+        const result = await appwrite.updateServeAttempt(updatedServe.id, updatedServe);
+        
+        if (result) {
+          setServes(prevServes => 
+            prevServes.map(serve => 
+              serve.id === updatedServe.id ? updatedServe : serve
+            )
+          );
           
-          // Reload all data to ensure we're in sync
-          await loadData();
-          
-          toast({
-            title: "Serve record updated",
-            description: "Serve attempt has been updated"
+          toast.success("Serve attempt updated", {
+            description: "Serve attempt has been updated successfully"
           });
           
-          return true;
-        } catch (error) {
-          console.error("Error updating serve in Appwrite:", error);
-          
-          // Fall back to local storage
-          localStorage.updateServe(updatedServe);
-          setServes(serves.map(s => s.id === updatedServe.id ? updatedServe : s));
-          
-          toast({
-            title: "Serve updated locally",
-            description: "Connection to Appwrite failed, updated in local storage",
-            variant: "destructive"
-          });
+          setTimeout(() => {
+            loadAppwriteData();
+          }, 500);
           
           return true;
         }
-      } else {
-        // Update in local storage
-        localStorage.updateServe(updatedServe);
-        setServes(serves.map(s => s.id === updatedServe.id ? updatedServe : s));
-        
-        toast({
-          title: "Serve record updated",
-          description: "Serve attempt has been updated"
+        return false;
+      } catch (error) {
+        console.error("Error updating serve attempt in Appwrite:", error);
+        toast.error("Error updating serve attempt", {
+          description: error instanceof Error ? error.message : "Unknown error"
         });
-        
-        return true;
+        return false;
       }
+    }
+    
+    try {
+      console.log("Updating serve attempt:", updatedServe);
+      
+      const result = await updateServeAttempt(updatedServe);
+      
+      if (!result.success) {
+        console.error("Error updating serve attempt:", result.error);
+        console.log("Failed to update record:", result.error || "Please try again");
+        return false;
+      }
+      
+      setServes(prevServes => 
+        prevServes.map(serve => 
+          serve.id === updatedServe.id ? updatedServe : serve
+        )
+      );
+      
+      console.log("Serve attempt updated successfully");
+      
+      setTimeout(async () => {
+        await syncSupabaseServesToLocal();
+      }, 500);
+      
+      return true;
     } catch (error) {
-      console.error("Error updating serve:", error);
-      
-      toast({
-        title: "Error updating serve",
-        description: "Failed to update serve attempt",
-        variant: "destructive"
-      });
-      
+      console.error("Exception updating serve attempt:", error);
+      console.log("An unexpected error occurred");
       return false;
     }
   };
 
-  // Handle navigation to new serve attempt for specific client and case
-  const handleNewAttempt = (clientId: string, caseNumber: string, previousAttempts: number) => {
-    navigate(`/new-serve?clientId=${clientId}&caseNumber=${caseNumber}`);
+  const deleteServe = async (serveId: string) => {
+    if (usingAppwrite) {
+      try {
+        console.log("Deleting serve attempt from Appwrite:", serveId);
+        
+        const result = await appwrite.deleteServeAttempt(serveId);
+        
+        if (result.success) {
+          setServes(prev => prev.filter(serve => serve.id !== serveId));
+          
+          toast.success("Serve attempt deleted", {
+            description: "Serve attempt has been permanently removed"
+          });
+          
+          setTimeout(() => {
+            loadAppwriteData();
+          }, 500);
+          
+          return true;
+        }
+        return false;
+      } catch (error) {
+        console.error("Error deleting serve attempt from Appwrite:", error);
+        toast.error("Error deleting serve attempt", {
+          description: error instanceof Error ? error.message : "Unknown error"
+        });
+        return false;
+      }
+    }
+    
+    try {
+      console.log("Removing serve attempt from state:", serveId);
+      
+      const result = await deleteServeAttempt(serveId);
+      
+      if (!result.success) {
+        console.error("Error deleting serve attempt:", result.error);
+        console.log("Failed to delete record:", result.error || "Please try again");
+        return false;
+      }
+      
+      setServes(serves.filter(serve => serve.id !== serveId));
+      
+      console.log("Serve attempt deleted successfully");
+      
+      setTimeout(async () => {
+        await syncSupabaseServesToLocal();
+      }, 500);
+      
+      return true;
+    } catch (error) {
+      console.error("Error removing serve attempt from state:", error);
+      return false;
+    }
   };
 
-  // Add utility to create localStorage.ts file for local storage operations:
+  const handleResetData = () => {
+    clearLocalStorage();
+    window.location.href = "/migration";
+  };
+
+  useEffect(() => {
+    if (location.pathname === "/new-serve" && location.search) {
+      const params = new URLSearchParams(location.search);
+      const clientId = params.get("clientId");
+      const attempts = params.get("attempts");
+      
+      if (!clientId || !clients.some(c => c.id === clientId)) {
+        navigate("/new-serve");
+      }
+    }
+  }, [location, clients, navigate]);
+
+  if (!dataLoaded) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="animate-spin w-10 h-10 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-lg text-muted-foreground">Loading application...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
-      <Toaster position="bottom-right" />
-      <Routes>
-        <Route path="/" element={<Layout isLoading={isLoading} activeBackend={ACTIVE_BACKEND} />}>
-          <Route 
-            index 
-            element={
-              <Dashboard 
-                clients={clients} 
-                serves={serves} 
-              />
-            } 
-          />
-          <Route 
-            path="clients" 
-            element={
-              <Clients 
-                clients={clients} 
-                setSelectedClient={(id) => navigate(`/clients/${id}`)} 
-              />
-            } 
-          />
-          <Route 
-            path="clients/new" 
-            element={
-              <NewClient 
-                addClient={addClient} 
-              />
-            } 
-          />
-          <Route 
-            path="clients/:id" 
-            element={
-              <ClientDetail 
-                clients={clients}
-                serves={serves}
-                addServe={addServe}
-              />
-            } 
-          />
-          <Route 
-            path="clients/:id/edit" 
-            element={
-              <EditClient 
-                clients={clients}
-                updateClient={updateClient}
-              />
-            } 
-          />
-          <Route 
-            path="history" 
-            element={
-              <History 
-                serves={serves} 
-                clients={clients}
-                deleteServe={deleteServe}
-                updateServe={updateServe}
-              />
-            } 
-          />
-          <Route 
-            path="new-serve" 
-            element={
-              <NewServe 
-                clients={clients} 
-                addServe={addServe}
-              />
-            } 
-          />
-          <Route 
-            path="export" 
-            element={
-              <Export />
-            } 
-          />
-          <Route 
-            path="settings" 
-            element={
-              <Settings 
-                reloadData={loadData}
-              />
-            } 
-          />
-          <Route 
-            path="*" 
-            element={
-              <div className="text-center py-10">
-                <h1 className="text-xl font-bold mb-4">Page Not Found</h1>
-                <p className="mb-4">Sorry, the page you're looking for doesn't exist.</p>
-                <button 
-                  onClick={() => navigate("/")}
-                  className="px-4 py-2 bg-primary text-white rounded hover:bg-primary/80"
-                >
-                  Return to Dashboard
-                </button>
-              </div>
-            } 
-          />
-        </Route>
-        <Route path="/migration" element={<div>Redirecting...</div>} />
-      </Routes>
+      {showAppwriteAlert && (
+        <Alert className="max-w-4xl mx-auto mt-4">
+          <AlertTitle>Not using Appwrite</AlertTitle>
+          <AlertDescription>
+            <p className="mb-2">
+              The application is currently using Supabase. To use Appwrite, make sure it's properly configured.
+            </p>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={handleResetData}>
+                Reset Data
+              </Button>
+              <Button size="sm" onClick={() => navigate("/migration")}>
+                Go to Migration
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      <TransitionGroup component={null}>
+        <CSSTransition key={location.key} classNames="page" timeout={400}>
+          <Routes location={location}>
+            <Route path="/" element={<Layout />}>
+              <Route index element={<Dashboard clients={clients} serves={serves} />} />
+              <Route path="new-serve" element={
+                <NewServe 
+                  clients={clients} 
+                  addServe={addServe} 
+                  clientId={new URLSearchParams(location.search).get("clientId") || undefined}
+                  previousAttempts={Number(new URLSearchParams(location.search).get("attempts")) || 0}
+                />
+              } />
+              <Route path="clients" element={
+                <Clients 
+                  clients={clients}
+                  addClient={addClient}
+                  updateClient={updateClient}
+                  deleteClient={deleteClient}
+                />
+              } />
+              <Route path="history" element={
+                <History 
+                  serves={serves} 
+                  clients={clients} 
+                  deleteServe={deleteServe}
+                  updateServe={updateServe}
+                />
+              } />
+              <Route path="export" element={<DataExport />} />
+              <Route path="*" element={<NotFound />} />
+            </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </CSSTransition>
+      </TransitionGroup>
     </>
   );
-}
+};
+
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <AnimatedRoutes />
+    </TooltipProvider>
+  </QueryClientProvider>
+);
 
 export default App;

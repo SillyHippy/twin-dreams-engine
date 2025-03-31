@@ -45,12 +45,11 @@ import {
   deleteClientDocument,
   getClientCases,
   type UploadedDocument 
-} from "@/utils/appwriteStorage";
+} from "@/utils/supabaseStorage";
 import { toast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { ACTIVE_BACKEND, BACKEND_PROVIDER, shouldUseFallbackStorage } from '@/config/backendConfig';
-import * as supabaseStorage from '@/utils/supabaseStorage';
-import * as appwriteStorage from '@/utils/appwriteStorage';
+import { ACTIVE_BACKEND, BACKEND_PROVIDER } from '@/config/backendConfig';
+import { appwrite } from '@/lib/appwrite';
 
 interface ClientDocumentsProps {
   clientId: string;
@@ -71,10 +70,6 @@ export default function ClientDocuments({ clientId, clientName, caseNumber, onUp
   const [isLoading, setIsLoading] = useState(true);
   const isMobile = useIsMobile();
   
-  const storage = ACTIVE_BACKEND === BACKEND_PROVIDER.SUPABASE 
-    ? supabaseStorage 
-    : appwriteStorage;
-  
   useEffect(() => {
     if (clientId) {
       loadDocuments();
@@ -91,7 +86,7 @@ export default function ClientDocuments({ clientId, clientName, caseNumber, onUp
   const loadDocuments = async () => {
     setIsLoading(true);
     try {
-      const docs = await storage.getClientDocuments(clientId, caseNumber);
+      const docs = await getClientDocuments(clientId, caseNumber);
       setDocuments(docs);
     } catch (error) {
       console.error("Error loading documents:", error);
@@ -105,7 +100,7 @@ export default function ClientDocuments({ clientId, clientName, caseNumber, onUp
 
   const loadCases = async () => {
     try {
-      const clientCases = await storage.getClientCases(clientId);
+      const clientCases = await getClientCases(clientId);
       setCases(clientCases);
     } catch (error) {
       console.error("Error loading cases:", error);
@@ -134,7 +129,7 @@ export default function ClientDocuments({ clientId, clientName, caseNumber, onUp
     setIsUploading(true);
     
     try {
-      const uploaded = await storage.uploadClientDocument(
+      const uploaded = await uploadClientDocument(
         clientId,
         selectedFile,
         selectedCase || undefined,
@@ -181,7 +176,7 @@ export default function ClientDocuments({ clientId, clientName, caseNumber, onUp
 
   const handleDownload = async (document: UploadedDocument) => {
     try {
-      const url = await storage.getDocumentUrl(document.filePath);
+      const url = await getDocumentUrl(document.filePath);
       
       if (url) {
         const a = window.document.createElement('a');
@@ -211,7 +206,7 @@ export default function ClientDocuments({ clientId, clientName, caseNumber, onUp
 
   const handleDelete = async (document: UploadedDocument) => {
     try {
-      const success = await storage.deleteClientDocument(document.id, document.filePath);
+      const success = await deleteClientDocument(document.id, document.filePath);
       
       if (success) {
         setDocuments(documents.filter(doc => doc.id !== document.id));
