@@ -5,7 +5,7 @@ import { Navbar } from "./Navbar";
 import { Sidebar } from "./Sidebar";
 import { toast } from "sonner";
 import { ThemeProvider } from "./theme-provider";
-import { ReloadIcon } from "@/components/ui/icons";
+import { ReloadIcon } from "./ui/icons";
 import { Loader2 } from "lucide-react";
 import { BACKEND_PROVIDER } from "@/config/backendConfig";
 import { getBackendInfo } from "@/utils/backendHelpers";
