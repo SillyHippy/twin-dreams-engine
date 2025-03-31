@@ -1,3 +1,4 @@
+
 import { appwrite } from "@/lib/appwrite";
 import { v4 as uuidv4 } from "uuid";
 import { toast } from "@/hooks/use-toast";
@@ -112,7 +113,7 @@ export async function getServeAttemptsCount(clientId: string, caseNumber: string
     console.log(`Checking serve attempts for client ${clientId} and case ${caseNumber}`);
     
     try {
-      // Use the Query API from Appwrite to filter serve attempts
+      // Use Appwrite to filter serve attempts
       const serveAttempts = await appwrite.getServeAttempts();
       const filteredAttempts = serveAttempts.filter(
         serve => serve.clientId === clientId && serve.caseNumber === caseNumber

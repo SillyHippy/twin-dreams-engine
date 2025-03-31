@@ -32,9 +32,19 @@ const History: React.FC<HistoryProps> = ({
     
     setIsSyncing(true);
     try {
-      const synced = await appwrite.syncAppwriteServesToLocal();
+      // Using appwrite to refresh data
+      let success = false;
+      try {
+        // Get all serve attempts from Appwrite
+        const appwriteServes = await appwrite.getServeAttempts();
+        console.log(`Loaded ${appwriteServes.length} serve attempts from Appwrite`);
+        success = true;
+      } catch (error) {
+        console.error("Error refreshing data from Appwrite:", error);
+        success = false;
+      }
       
-      if (synced) {
+      if (success) {
         toast({
           title: "History Refreshed",
           description: "Serve history has been updated with the latest data."

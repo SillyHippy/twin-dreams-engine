@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { 
   Card, 
@@ -38,18 +39,21 @@ import {
   FileCheck,
   Briefcase
 } from "lucide-react";
-import { 
-  uploadClientDocument, 
-  getClientDocuments, 
-  getDocumentUrl, 
-  deleteClientDocument,
-  getClientCases,
-  type UploadedDocument 
-} from "@/utils/supabaseStorage";
+import { appwrite } from '@/lib/appwrite';
 import { toast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { ACTIVE_BACKEND, BACKEND_PROVIDER } from '@/config/backendConfig';
-import { appwrite } from '@/lib/appwrite';
+
+interface UploadedDocument {
+  id: string;
+  clientId: string;
+  fileName: string;
+  filePath: string;
+  fileType: string;
+  fileSize: number;
+  caseNumber?: string;
+  description?: string;
+  caseName?: string;
+}
 
 interface ClientDocumentsProps {
   clientId: string;
@@ -86,7 +90,7 @@ export default function ClientDocuments({ clientId, clientName, caseNumber, onUp
   const loadDocuments = async () => {
     setIsLoading(true);
     try {
-      const docs = await getClientDocuments(clientId, caseNumber);
+      const docs = await appwrite.getClientDocuments(clientId, caseNumber);
       setDocuments(docs);
     } catch (error) {
       console.error("Error loading documents:", error);
@@ -100,7 +104,7 @@ export default function ClientDocuments({ clientId, clientName, caseNumber, onUp
 
   const loadCases = async () => {
     try {
-      const clientCases = await getClientCases(clientId);
+      const clientCases = await appwrite.getClientCases(clientId);
       setCases(clientCases);
     } catch (error) {
       console.error("Error loading cases:", error);
@@ -129,7 +133,7 @@ export default function ClientDocuments({ clientId, clientName, caseNumber, onUp
     setIsUploading(true);
     
     try {
-      const uploaded = await uploadClientDocument(
+      const uploaded = await appwrite.uploadClientDocument(
         clientId,
         selectedFile,
         selectedCase || undefined,
@@ -176,7 +180,7 @@ export default function ClientDocuments({ clientId, clientName, caseNumber, onUp
 
   const handleDownload = async (document: UploadedDocument) => {
     try {
-      const url = await getDocumentUrl(document.filePath);
+      const url = await appwrite.getDocumentUrl(document.filePath);
       
       if (url) {
         const a = window.document.createElement('a');
@@ -206,7 +210,7 @@ export default function ClientDocuments({ clientId, clientName, caseNumber, onUp
 
   const handleDelete = async (document: UploadedDocument) => {
     try {
-      const success = await deleteClientDocument(document.id, document.filePath);
+      const success = await appwrite.deleteClientDocument(document.id, document.filePath);
       
       if (success) {
         setDocuments(documents.filter(doc => doc.id !== document.id));
