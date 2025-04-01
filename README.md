@@ -1,54 +1,69 @@
+# Welcome to your Lovable project
 
-# ServeTracker
+## Project info
 
-A process server tracking application built with Appwrite backend integration.
+**URL**: https://lovable.dev/projects/4fcdf2be-987a-4df0-bb27-8321f844d47e
 
-## Setup
+## How can I edit this code?
 
-### Prerequisites
+There are several ways of editing your application.
 
-1. Node.js and npm installed
-2. An Appwrite account and project set up
+**Use Lovable**
 
-### Appwrite Setup
+Simply visit the [Lovable Project](https://lovable.dev/projects/4fcdf2be-987a-4df0-bb27-8321f844d47e) and start prompting.
 
-1. Create a new Appwrite project or use an existing one
-2. Create a database named "serve-tracker-db" with the following collections:
-   - `clients` - for storing client information
-   - `serve_attempts` - for storing serve attempt records
-   - `client_cases` - for storing case information
-   - `client_documents` - for storing document metadata
-3. Create a storage bucket named "client-documents" for document files
-4. Set up the attributes in each collection as shown in the app
+Changes made via Lovable will be committed automatically to this repo.
 
-### Environment Configuration
+**Use your preferred IDE**
 
-1. Copy `.env.example` to `.env.local`
-2. Update the Appwrite endpoint and project ID
+If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
 
-```
-VITE_APPWRITE_ENDPOINT=https://cloud.appwrite.io/v1
-VITE_APPWRITE_PROJECT_ID=your-project-id-here
-```
+The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
 
-## Development
+Follow these steps:
 
-```bash
-# Install dependencies
-npm install
+```sh
+# Step 1: Clone the repository using the project's Git URL.
+git clone <YOUR_GIT_URL>
 
-# Start development server
+# Step 2: Navigate to the project directory.
+cd <YOUR_PROJECT_NAME>
+
+# Step 3: Install the necessary dependencies.
+npm i
+
+# Step 4: Start the development server with auto-reloading and an instant preview.
 npm run dev
 ```
 
-## Deployment
+**Edit a file directly in GitHub**
 
-This project is configured for Netlify deployment.
+- Navigate to the desired file(s).
+- Click the "Edit" button (pencil icon) at the top right of the file view.
+- Make your changes and commit the changes.
 
-```bash
-# Build for production
-npm run build
+**Use GitHub Codespaces**
 
-# Deploy to Netlify
-netlify deploy
-```
+- Navigate to the main page of your repository.
+- Click on the "Code" button (green button) near the top right.
+- Select the "Codespaces" tab.
+- Click on "New codespace" to launch a new Codespace environment.
+- Edit files directly within the Codespace and commit and push your changes once you're done.
+
+## What technologies are used for this project?
+
+This project is built with .
+
+- Vite
+- TypeScript
+- React
+- shadcn-ui
+- Tailwind CSS
+
+## How can I deploy this project?
+
+Simply open [Lovable](https://lovable.dev/projects/4fcdf2be-987a-4df0-bb27-8321f844d47e) and click on Share -> Publish.
+
+## I want to use a custom domain - is that possible?
+
+We don't support custom domains (yet). If you want to deploy your project under your own domain then we recommend using Netlify. Visit our docs for more details: [Custom domains](https://docs.lovable.dev/tips-tricks/custom-domain/)

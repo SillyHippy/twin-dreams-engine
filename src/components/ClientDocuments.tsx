@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { 
   Card, 
@@ -39,21 +38,10 @@ import {
   FileCheck,
   Briefcase
 } from "lucide-react";
-import { appwrite } from '@/lib/appwrite';
 import { toast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
-
-interface UploadedDocument {
-  id: string;
-  clientId: string;
-  fileName: string;
-  filePath: string;
-  fileType: string;
-  fileSize: number;
-  caseNumber?: string;
-  description?: string;
-  caseName?: string;
-}
+import { ACTIVE_BACKEND, BACKEND_PROVIDER } from '@/config/backendConfig';
+import * as appwriteStorage from '@/utils/appwriteStorage';
 
 interface ClientDocumentsProps {
   clientId: string;
@@ -74,6 +62,8 @@ export default function ClientDocuments({ clientId, clientName, caseNumber, onUp
   const [isLoading, setIsLoading] = useState(true);
   const isMobile = useIsMobile();
   
+  const storage = appwriteStorage;
+  
   useEffect(() => {
     if (clientId) {
       loadDocuments();
@@ -90,12 +80,14 @@ export default function ClientDocuments({ clientId, clientName, caseNumber, onUp
   const loadDocuments = async () => {
     setIsLoading(true);
     try {
-      const docs = await appwrite.getClientDocuments(clientId, caseNumber);
+      const docs = await storage.getClientDocuments(clientId, caseNumber);
       setDocuments(docs);
     } catch (error) {
       console.error("Error loading documents:", error);
-      toast.error("Failed to load documents", {
-        position: "bottom-right"
+      toast({
+        title: "Error",
+        description: "Failed to load documents",
+        variant: "destructive"
       });
     } finally {
       setIsLoading(false);
@@ -104,7 +96,7 @@ export default function ClientDocuments({ clientId, clientName, caseNumber, onUp
 
   const loadCases = async () => {
     try {
-      const clientCases = await appwrite.getClientCases(clientId);
+      const clientCases = await storage.getClientCases(clientId);
       setCases(clientCases);
     } catch (error) {
       console.error("Error loading cases:", error);
@@ -133,7 +125,7 @@ export default function ClientDocuments({ clientId, clientName, caseNumber, onUp
     setIsUploading(true);
     
     try {
-      const uploaded = await appwrite.uploadClientDocument(
+      const uploaded = await storage.uploadClientDocument(
         clientId,
         selectedFile,
         selectedCase || undefined,
@@ -180,7 +172,7 @@ export default function ClientDocuments({ clientId, clientName, caseNumber, onUp
 
   const handleDownload = async (document: UploadedDocument) => {
     try {
-      const url = await appwrite.getDocumentUrl(document.filePath);
+      const url = await storage.getDocumentUrl(document.filePath);
       
       if (url) {
         const a = window.document.createElement('a');
@@ -210,7 +202,7 @@ export default function ClientDocuments({ clientId, clientName, caseNumber, onUp
 
   const handleDelete = async (document: UploadedDocument) => {
     try {
-      const success = await appwrite.deleteClientDocument(document.id, document.filePath);
+      const success = await storage.deleteClientDocument(document.id, document.filePath);
       
       if (success) {
         setDocuments(documents.filter(doc => doc.id !== document.id));

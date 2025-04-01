@@ -1,5 +1,4 @@
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import ServeHistory from "@/components/ServeHistory";
 import { ClientData } from "@/components/ClientForm";
 import { ServeAttemptData } from "@/components/ServeAttempt";
@@ -32,19 +31,9 @@ const History: React.FC<HistoryProps> = ({
     
     setIsSyncing(true);
     try {
-      // Using appwrite to refresh data
-      let success = false;
-      try {
-        // Get all serve attempts from Appwrite
-        const appwriteServes = await appwrite.getServeAttempts();
-        console.log(`Loaded ${appwriteServes.length} serve attempts from Appwrite`);
-        success = true;
-      } catch (error) {
-        console.error("Error refreshing data from Appwrite:", error);
-        success = false;
-      }
+      const synced = await appwrite.syncAppwriteServesToLocal();
       
-      if (success) {
+      if (synced) {
         toast({
           title: "History Refreshed",
           description: "Serve history has been updated with the latest data."
@@ -71,6 +60,29 @@ const History: React.FC<HistoryProps> = ({
   const handleEditServe = (serve: ServeAttemptData) => {
     setSelectedServe(serve);
     setIsEditDialogOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      const success = await deleteServe(id);
+      
+      if (success) {
+        toast({
+          title: "Success",
+          description: "Serve attempt has been deleted",
+          variant: "default"
+        });
+      } else {
+        throw new Error("Failed to delete serve attempt");
+      }
+    } catch (error) {
+      console.error("Error deleting serve attempt:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete serve attempt",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
@@ -109,7 +121,7 @@ const History: React.FC<HistoryProps> = ({
         <ServeHistory 
           serves={serves} 
           clients={clients} 
-          onDelete={deleteServe}
+          onDelete={handleDelete}
           onEdit={handleEditServe}
         />
       )}
