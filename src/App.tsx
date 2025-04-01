@@ -138,7 +138,7 @@ const AnimatedRoutes = () => {
     console.log("Updated localStorage serve-tracker-serves:", serves.length, "entries");
   }, [serves]);
 
-  const createClient = async (client) => {
+  const createClient = async (client): Promise<ClientData | null> => {
     try {
       console.log("Creating new client in Appwrite:", client);
       
@@ -157,7 +157,7 @@ const AnimatedRoutes = () => {
         toast({
           title: "Client created",
           description: "New client has been added successfully",
-          variant: "success",
+          variant: "default",
         });
         
         const formattedClient = {
@@ -178,6 +178,7 @@ const AnimatedRoutes = () => {
         
         return formattedClient;
       }
+      return null;
     } catch (error) {
       console.error("Error creating client in Appwrite:", error);
       toast({

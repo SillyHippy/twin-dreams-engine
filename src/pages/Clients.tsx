@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { PlusCircle, Users, Pencil, Trash2, UserCheck, ArrowLeft } from "lucide-react";
@@ -36,8 +37,8 @@ import { useToast } from "@/hooks/use-toast";
 
 interface ClientsProps {
   clients: ClientData[];
-  addClient: (client: ClientData) => void;
-  updateClient: (client: ClientData) => void;
+  addClient: (client: ClientData) => Promise<ClientData | null>;
+  updateClient: (client: ClientData) => Promise<boolean>;
   deleteClient: (clientId: string) => Promise<boolean>;
   onSelectClient?: (id: any) => void;
 }

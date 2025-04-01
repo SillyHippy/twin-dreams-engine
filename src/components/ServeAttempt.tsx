@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Camera as CameraIcon, MapPin, X, Send, CheckCircle, Calendar as CalendarIcon, Clock, User, FileText } from "lucide-react";
@@ -87,7 +86,7 @@ export default function ServeAttempt({ clients, addServe, onCancel, preselectedC
       toast({
         title: "Location Acquired",
         description: `Latitude: ${coords.latitude}, Longitude: ${coords.longitude}`,
-        variant: "success",
+        variant: "default",
       });
     } catch (error) {
       console.error("Error getting location:", error);
