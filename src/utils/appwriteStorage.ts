@@ -25,7 +25,7 @@ export async function uploadClientDocument(
     
     return {
       id: result.$id,
-      clientId: result.clientId,
+      clientId: result.client_id, // Changed from clientId to client_id to match Appwrite schema
       fileName: result.fileName,
       filePath: result.filePath,
       fileType: result.fileType,
@@ -46,7 +46,7 @@ export async function getClientDocuments(clientId: string, caseNumber?: string):
     
     return documents.map(doc => ({
       id: doc.$id,
-      clientId: doc.clientId,
+      clientId: doc.client_id, // Changed from clientId to client_id to match Appwrite schema
       fileName: doc.fileName,
       filePath: doc.filePath,
       fileType: doc.fileType,
