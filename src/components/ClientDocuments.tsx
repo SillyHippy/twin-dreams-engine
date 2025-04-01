@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { 
   Card, 
@@ -298,7 +297,7 @@ export default function ClientDocuments({ clientId, clientName, caseNumber, onUp
                 <SelectValue placeholder="Select a case (optional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No case</SelectItem>
+                <SelectItem value="no-case">No case</SelectItem>
                 {cases.map((c) => (
                   <SelectItem key={c.caseNumber} value={c.caseNumber}>
                     {getCaseDisplayName(c.caseNumber, c.caseName) || c.caseNumber}
