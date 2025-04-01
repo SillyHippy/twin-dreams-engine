@@ -1,4 +1,3 @@
-
 import React, { useRef, useState, useEffect } from "react";
 import { Camera, X, Image, MapPin, CheckCircle, AlertCircle, RefreshCw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,9 +7,10 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 interface CameraComponentProps {
   onCapture: (imageData: string, location: GeolocationCoordinates) => void;
+  onClose: () => void;
 }
 
-const CameraComponent: React.FC<CameraComponentProps> = ({ onCapture }) => {
+const CameraComponent: React.FC<CameraComponentProps> = ({ onCapture, onClose }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -458,7 +458,7 @@ const CameraComponent: React.FC<CameraComponentProps> = ({ onCapture }) => {
           <>
             <Button 
               variant="outline" 
-              onClick={() => setUseNativeCamera(false)}
+              onClick={onClose}
               className="flex-1"
             >
               <X className="w-4 h-4 mr-2" />
@@ -478,7 +478,7 @@ const CameraComponent: React.FC<CameraComponentProps> = ({ onCapture }) => {
           <>
             <Button 
               variant="outline" 
-              onClick={stopCamera}
+              onClick={onClose}
               className="flex-1"
               disabled={cameraStatus === "loading"}
             >

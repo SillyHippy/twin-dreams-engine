@@ -2,7 +2,7 @@
 import React from 'react';
 
 export interface CameraComponentProps {
-  onCapture: (imageData: string) => void;
+  onCapture: (imageData: string, location?: GeolocationCoordinates) => void;
   onClose: () => void;
 }
 
