@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Camera as CameraIcon, MapPin, X, Send, CheckCircle, Calendar as CalendarIcon, Clock, User, FileText } from "lucide-react";
@@ -142,7 +143,10 @@ export default function ServeAttempt({ clients, addServe, onCancel, preselectedC
             subject: `New Serve Attempt for ${client.name}`,
             body: `A new serve attempt has been recorded for ${client.name} on ${timestamp.toLocaleDateString()} at ${timestamp.toLocaleTimeString()}. Status: ${status}. Notes: ${notes || 'No notes.'}`,
             imageData: imageData || undefined,
-            coordinates: coordinates || undefined
+            coordinates: coordinates ? {
+              lat: coordinates.latitude,
+              lng: coordinates.longitude
+            } : undefined
           });
           
           if (!emailResult.success) {
