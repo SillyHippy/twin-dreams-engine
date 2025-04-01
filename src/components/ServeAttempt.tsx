@@ -131,7 +131,7 @@ export default function ServeAttempt({ clients, addServe, onCancel, preselectedC
         toast({
           title: "Serve Attempt Saved",
           description: "Serve attempt has been recorded",
-          variant: "success",
+          variant: "default",
         });
         
         // Send email notification
