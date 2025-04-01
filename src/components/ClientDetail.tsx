@@ -23,7 +23,7 @@ import ClientCases from "./ClientCases";
 import { ClientData } from "./ClientForm";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { appwrite } from "@/lib/appwrite";
-import { toast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
 
 interface ClientDetailProps {
   client: ClientData;
@@ -34,25 +34,43 @@ interface ClientDetailProps {
 export default function ClientDetail({ client, onUpdate, onBack }: ClientDetailProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState("details");
+  const [isUpdating, setIsUpdating] = useState(false);
   const isMobile = useIsMobile();
+  const { toast } = useToast();
 
   const handleUpdateClient = async (updatedClient: ClientData) => {
     try {
+      setIsUpdating(true);
+      
+      // Ensure we're using the correct field names for Appwrite
+      const clientData = {
+        name: updatedClient.name,
+        email: updatedClient.email,
+        additional_emails: updatedClient.additionalEmails || [],
+        phone: updatedClient.phone,
+        address: updatedClient.address,
+        notes: updatedClient.notes || ""
+      };
+      
+      console.log("Updating client with data:", clientData);
+      
       // First try to update in Appwrite
-      await appwrite.updateClient(client.id, updatedClient);
+      const result = await appwrite.updateClient(client.id, clientData);
       
-      // Then update local state
-      onUpdate({
-        ...updatedClient,
-        id: client.id // Ensure ID is preserved
-      });
-      
-      setIsEditing(false);
-      
-      toast({
-        title: "Client updated",
-        description: "Client information has been successfully updated"
-      });
+      if (result) {
+        // Then update local state
+        onUpdate({
+          ...updatedClient,
+          id: client.id // Ensure ID is preserved
+        });
+        
+        setIsEditing(false);
+        
+        toast({
+          title: "Client updated",
+          description: "Client information has been successfully updated"
+        });
+      }
     } catch (error) {
       console.error("Error updating client:", error);
       toast({
@@ -60,6 +78,8 @@ export default function ClientDetail({ client, onUpdate, onBack }: ClientDetailP
         description: error instanceof Error ? error.message : "An error occurred updating the client",
         variant: "destructive"
       });
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -97,6 +117,7 @@ export default function ClientDetail({ client, onUpdate, onBack }: ClientDetailP
                   <ClientForm
                     onSubmit={handleUpdateClient}
                     initialData={client}
+                    isLoading={isUpdating}
                   />
                 </DialogContent>
               </Dialog>

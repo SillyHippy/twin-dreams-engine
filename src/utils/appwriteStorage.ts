@@ -1,3 +1,4 @@
+
 import { appwrite } from "@/lib/appwrite";
 import { v4 as uuidv4 } from "uuid";
 
@@ -23,7 +24,7 @@ export async function uploadClientDocument(
     const result = await appwrite.uploadClientDocument(clientId, file, caseNumber, description);
     
     return {
-      id: result.id,
+      id: result.$id,
       clientId: result.clientId,
       fileName: result.fileName,
       filePath: result.filePath,

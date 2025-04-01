@@ -78,14 +78,15 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
     setIsSubmitting(true);
     
     try {
-      // Ensure we're using the correct format for client_id
+      // Match the field names exactly with the Appwrite schema
       const newCase = {
-        client_id: clientId, // Fix: Use clientId string directly, not as an object
+        client_id: clientId,
         case_number: caseNumber,
         case_name: caseName || "",
-        courtName: courtName || "",
         description: caseNotes || "",
-        status: "active"
+        status: "active",
+        // These fields aren't in the schema shown, but maintaining compatibility
+        courtName: courtName || ""
       };
       
       console.log("Creating new case with data:", newCase);
@@ -221,7 +222,7 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {cases.map((caseItem) => (
-                  <Card key={caseItem.caseNumber} className="neo-card">
+                  <Card key={caseItem.id || caseItem.caseNumber} className="neo-card">
                     <CardHeader>
                       <CardTitle className="flex items-center">
                         <Briefcase className="h-4 w-4 mr-2" />
