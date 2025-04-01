@@ -54,8 +54,8 @@ const Dashboard: React.FC<DashboardProps> = ({ clients, serves }) => {
     return serveDate.toDateString() === today.toDateString();
   }).length;
 
-  // Update a serve attempt
-  const updateServe = async (serveData: ServeAttemptData) => {
+  // Update a serve attempt - make sure it returns a boolean
+  const updateServe = async (serveData: ServeAttemptData): Promise<boolean> => {
     try {
       const updatedServe = await appwrite.updateServeAttempt(serveData.id!, {
         ...serveData,
@@ -80,8 +80,8 @@ const Dashboard: React.FC<DashboardProps> = ({ clients, serves }) => {
     setEditDialogOpen(true);
   };
 
-  // Handle save edited serve
-  const handleServeUpdate = async (updatedServe: ServeAttemptData) => {
+  // Handle save edited serve - updated to return a boolean
+  const handleServeUpdate = async (updatedServe: ServeAttemptData): Promise<boolean> => {
     try {
       const success = await updateServe(updatedServe);
       
@@ -92,9 +92,12 @@ const Dashboard: React.FC<DashboardProps> = ({ clients, serves }) => {
         
         setEditDialogOpen(false);
         setEditingServe(null);
+        return true;
       }
+      return false;
     } catch (error) {
       console.error("Error updating serve:", error);
+      return false;
     }
   };
 

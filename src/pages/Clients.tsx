@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { PlusCircle, Users, Pencil, Trash2, UserCheck, ArrowLeft } from "lucide-react";
@@ -62,9 +61,8 @@ const Clients: React.FC<ClientsProps> = ({
     setIsLoading(true);
     
     try {
-      // Create a properly formatted client object
       const newClientData = {
-        id: client.id || undefined, // Let Appwrite generate ID if none provided
+        id: client.id || undefined,
         name: client.name,
         email: client.email,
         additionalEmails: client.additionalEmails || [],
@@ -73,10 +71,9 @@ const Clients: React.FC<ClientsProps> = ({
         notes: client.notes || "",
       };
       
-      // Use the addClient function passed as prop (connects to Appwrite)
-      const success = await addClient(newClientData);
+      const result = await addClient(newClientData);
       
-      if (success) {
+      if (result) {
         setIsAddDialogOpen(false);
         toast({
           title: "Client added",
@@ -100,7 +97,6 @@ const Clients: React.FC<ClientsProps> = ({
     setIsLoading(true);
     
     try {
-      // Call the update function passed in props
       await updateClient(client);
     } catch (error) {
       console.error("Error updating client:", error);
@@ -118,7 +114,6 @@ const Clients: React.FC<ClientsProps> = ({
     if (deleteClientId) {
       setIsLoading(true);
       try {
-        // Call the delete function passed in props
         const success = await deleteClient(deleteClientId);
         
         if (success) {
@@ -128,7 +123,6 @@ const Clients: React.FC<ClientsProps> = ({
             variant: "success"
           });
           
-          // Update local state
           if (selectedClient?.id === deleteClientId) {
             setSelectedClient(null);
             setIsDetailView(false);

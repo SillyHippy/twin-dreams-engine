@@ -68,23 +68,21 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
           if (ACTIVE_BACKEND === BACKEND_PROVIDER.APPWRITE) {
             // Fetch the client information from Appwrite
             const clients = await appwrite.getClients();
-            const client = clients.find(c => c.$id === serve.clientId);
+            const client = clients.find(c => c.id === serve.clientId);
             
             if (client) {
               setClientEmail(client.email);
               setClientName(client.name || "Client");
             }
           } else {
-            // Fetch from Supabase
-            const { data, error } = await supabase
-              .from('clients')
-              .select('email, name')
-              .eq('id', serve.clientId)
-              .single();
-              
-            if (!error && data) {
-              setClientEmail(data.email);
-              setClientName(data.name || "Client");
+            // Using local storage as fallback
+            const clientsStr = localStorage.getItem("serve-tracker-clients");
+            const clients = clientsStr ? JSON.parse(clientsStr) : [];
+            const client = clients.find((c: any) => c.id === serve.clientId);
+            
+            if (client) {
+              setClientEmail(client.email);
+              setClientName(client.name || "Client");
             }
           }
         } catch (error) {

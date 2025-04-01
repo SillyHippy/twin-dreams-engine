@@ -19,7 +19,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import * as appwriteStorage from "@/utils/appwriteStorage";
 import { sendEmail } from "@/utils/email";
 import { ClientData } from "./ClientForm";
-import { getLocationCoordinates, isGeolocationAvailable } from "@/utils/gps";
+import { getLocationCoordinates, isGeolocationAvailable, isGeolocationCoordinates } from "@/utils/gps";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
@@ -87,6 +87,7 @@ export default function ServeAttempt({ clients, addServe, onCancel, preselectedC
       toast({
         title: "Location Acquired",
         description: `Latitude: ${coords.latitude}, Longitude: ${coords.longitude}`,
+        variant: "success",
       });
     } catch (error) {
       console.error("Error getting location:", error);
@@ -131,6 +132,7 @@ export default function ServeAttempt({ clients, addServe, onCancel, preselectedC
         toast({
           title: "Serve Attempt Saved",
           description: "Serve attempt has been recorded",
+          variant: "success",
         });
         
         // Send email notification

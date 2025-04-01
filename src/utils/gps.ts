@@ -1,4 +1,3 @@
-
 /**
  * Gets the current GPS position
  * @returns Promise with the current position
@@ -33,24 +32,33 @@ export const getGpsPosition = (): Promise<GeolocationPosition> => {
  * @returns Boolean indicating if geolocation is available
  */
 export const isGeolocationAvailable = (): boolean => {
-  return !!navigator.geolocation;
+  return 'geolocation' in navigator;
 };
 
 /**
  * Gets the current location coordinates
  * @returns Promise with coordinates object
  */
-export const getLocationCoordinates = async (): Promise<{latitude: number; longitude: number}> => {
-  try {
-    const position = await getGpsPosition();
-    return {
-      latitude: position.coords.latitude,
-      longitude: position.coords.longitude
-    };
-  } catch (error) {
-    console.error("Error getting location coordinates:", error);
-    throw error;
-  }
+export const getLocationCoordinates = (): Promise<{latitude: number; longitude: number}> => {
+  return new Promise((resolve, reject) => {
+    if (!isGeolocationAvailable()) {
+      reject(new Error('Geolocation is not available in this browser'));
+      return;
+    }
+    
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude
+        });
+      },
+      (error) => {
+        reject(error);
+      },
+      { enableHighAccuracy: true }
+    );
+  });
 };
 
 /**
