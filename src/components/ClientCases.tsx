@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -77,18 +78,28 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
     setIsSubmitting(true);
     
     try {
+      // Updated to match Appwrite attribute naming convention
       const newCase = {
-        clientId,
-        caseNumber,
-        caseName: caseName || undefined,
-        courtName: courtName || undefined,
-        notes: caseNotes || undefined,
+        client_id: clientId,
+        case_number: caseNumber,
+        case_name: caseName || "",
+        courtName: courtName || "",
+        description: caseNotes || "",
+        status: "active"
       };
       
+      console.log("Creating new case with data:", newCase);
       const result = await appwrite.createClientCase(newCase);
       
       if (result) {
-        setCases([...cases, {...newCase, id: result.$id}]);
+        setCases([...cases, {
+          id: result.$id,
+          clientId: clientId,
+          caseNumber: caseNumber,
+          caseName: caseName,
+          courtName: courtName,
+          notes: caseNotes
+        }]);
         
         setAddCaseDialogOpen(false);
         setCaseNumber("");

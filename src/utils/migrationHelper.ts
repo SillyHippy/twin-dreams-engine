@@ -1,3 +1,4 @@
+
 import { appwrite } from "@/lib/appwrite";
 import { toast } from "@/hooks/use-toast";
 
@@ -17,7 +18,17 @@ export const migrateSupabaseToAppwrite = async () => {
     const migratedClients = [];
     for (const client of localClients) {
       try {
-        await appwrite.createClient(client);
+        // Format client data to match Appwrite schema
+        const formattedClient = {
+          name: client.name,
+          email: client.email,
+          additional_emails: client.additionalEmails || [],
+          phone: client.phone,
+          address: client.address,
+          notes: client.notes || ""
+        };
+        
+        await appwrite.createClient(formattedClient);
         migratedClients.push(client);
       } catch (error) {
         console.error(`Error migrating client ${client.id}:`, error);
@@ -29,9 +40,14 @@ export const migrateSupabaseToAppwrite = async () => {
     for (const serve of localServes) {
       try {
         await appwrite.createServeAttempt({
-          ...serve,
+          clientId: serve.clientId,
           date: serve.timestamp ? new Date(serve.timestamp).toLocaleDateString() : new Date().toLocaleDateString(),
-          time: serve.timestamp ? new Date(serve.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString()
+          time: serve.timestamp ? new Date(serve.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString(),
+          address: serve.address || "",
+          notes: serve.notes || "",
+          status: serve.status || "attempted",
+          imageData: serve.imageData || null,
+          coordinates: serve.coordinates || null
         });
         migratedServes.push(serve);
       } catch (error) {
@@ -39,7 +55,8 @@ export const migrateSupabaseToAppwrite = async () => {
       }
     }
     
-    toast.success("Migration complete", {
+    toast({
+      title: "Migration complete",
       description: `Migrated ${migratedClients.length} clients and ${migratedServes.length} serve attempts`
     });
     
@@ -50,8 +67,10 @@ export const migrateSupabaseToAppwrite = async () => {
     };
   } catch (error) {
     console.error("Error during migration:", error);
-    toast.error("Migration failed", {
-      description: error instanceof Error ? error.message : "Unknown error occurred"
+    toast({
+      title: "Migration failed",
+      description: error instanceof Error ? error.message : "Unknown error occurred",
+      variant: "destructive"
     });
     
     return {

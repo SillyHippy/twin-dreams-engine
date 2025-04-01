@@ -78,13 +78,17 @@ export async function deleteClientDocument(id: string, filePath: string): Promis
   }
 }
 
-export async function getClientCases(clientId: string): Promise<{ caseNumber: string; caseName?: string }[]> {
+export async function getClientCases(clientId: string): Promise<{ id?: string; caseNumber: string; caseName?: string; courtName?: string; notes?: string; status?: string }[]> {
   try {
     const cases = await appwrite.getClientCases(clientId);
     
     return cases.map(caseItem => ({
+      id: caseItem.id,
       caseNumber: caseItem.caseNumber,
-      caseName: caseItem.caseName
+      caseName: caseItem.caseName,
+      courtName: caseItem.courtName,
+      notes: caseItem.notes,
+      status: caseItem.status
     }));
   } catch (error) {
     console.error("Error fetching client cases:", error);

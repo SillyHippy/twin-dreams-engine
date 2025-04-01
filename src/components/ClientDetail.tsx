@@ -23,6 +23,7 @@ import ClientCases from "./ClientCases";
 import { ClientData } from "./ClientForm";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { appwrite } from "@/lib/appwrite";
+import { toast } from "@/hooks/use-toast";
 
 interface ClientDetailProps {
   client: ClientData;
@@ -35,9 +36,31 @@ export default function ClientDetail({ client, onUpdate, onBack }: ClientDetailP
   const [activeTab, setActiveTab] = useState("details");
   const isMobile = useIsMobile();
 
-  const handleUpdateClient = (updatedClient: ClientData) => {
-    onUpdate(updatedClient);
-    setIsEditing(false);
+  const handleUpdateClient = async (updatedClient: ClientData) => {
+    try {
+      // First try to update in Appwrite
+      await appwrite.updateClient(client.id, updatedClient);
+      
+      // Then update local state
+      onUpdate({
+        ...updatedClient,
+        id: client.id // Ensure ID is preserved
+      });
+      
+      setIsEditing(false);
+      
+      toast({
+        title: "Client updated",
+        description: "Client information has been successfully updated"
+      });
+    } catch (error) {
+      console.error("Error updating client:", error);
+      toast({
+        title: "Update failed",
+        description: error instanceof Error ? error.message : "An error occurred updating the client",
+        variant: "destructive"
+      });
+    }
   };
 
   return (

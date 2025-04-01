@@ -113,6 +113,8 @@ export const appwrite = {
         updated_at: new Date().toISOString()
       };
       
+      console.log("Updating client with ID:", clientId, "Data:", appwriteClientData);
+      
       const response = await databases.updateDocument(
         DATABASE_ID,
         CLIENTS_COLLECTION_ID,
@@ -129,6 +131,8 @@ export const appwrite = {
   
   async deleteClient(clientId) {
     try {
+      console.log("Deleting client with ID:", clientId);
+      
       await databases.deleteDocument(
         DATABASE_ID,
         CLIENTS_COLLECTION_ID,
@@ -237,12 +241,23 @@ export const appwrite = {
   // Case operations
   async getClientCases(clientId) {
     try {
+      console.log(`Fetching cases for client ${clientId}`);
       const response = await databases.listDocuments(
         DATABASE_ID,
         CASES_COLLECTION_ID,
-        [Query.equal('clientId', clientId)]
+        [Query.equal('client_id', clientId)]
       );
-      return response.documents;
+      
+      // Map the Appwrite document fields to our app's format
+      return response.documents.map(doc => ({
+        id: doc.$id,
+        clientId: doc.client_id,
+        caseNumber: doc.case_number,
+        caseName: doc.case_name,
+        courtName: doc.courtName || "",
+        notes: doc.description || "",
+        status: doc.status || "active"
+      }));
     } catch (error) {
       console.error(`Error fetching cases for client ${clientId}:`, error);
       return [];
@@ -253,19 +268,27 @@ export const appwrite = {
     try {
       const caseId = caseData.id || ID.unique();
       const now = new Date().toISOString();
+      
+      // Ensure we're using the correct field names based on Appwrite schema
+      const appwriteCaseData = {
+        client_id: caseData.client_id,
+        case_number: caseData.case_number,
+        case_name: caseData.case_name || "",
+        courtName: caseData.courtName || "",
+        description: caseData.description || "",
+        status: caseData.status || "active",
+        created_at: now
+      };
+      
+      console.log("Creating client case with data:", appwriteCaseData);
+      
       const response = await databases.createDocument(
         DATABASE_ID,
         CASES_COLLECTION_ID,
         caseId,
-        {
-          clientId: caseData.clientId,
-          caseNumber: caseData.caseNumber,
-          courtName: caseData.courtName,
-          caseName: caseData.caseName,
-          status: caseData.status || 'active',
-          created_at: now
-        }
+        appwriteCaseData
       );
+      
       return response;
     } catch (error) {
       console.error('Error creating client case:', error);
