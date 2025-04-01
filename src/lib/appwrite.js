@@ -1,3 +1,4 @@
+
 import { Client, Account, Databases, Storage, ID, Query, Teams, Functions } from 'appwrite';
 import { APPWRITE_CONFIG } from '@/config/backendConfig';
 
@@ -32,6 +33,14 @@ export const appwrite = {
   teams,
   functions,
   
+  // Constants for easier access
+  DATABASE_ID,
+  CLIENTS_COLLECTION_ID,
+  SERVE_ATTEMPTS_COLLECTION_ID,
+  CASES_COLLECTION_ID,
+  DOCUMENTS_COLLECTION_ID,
+  STORAGE_BUCKET_ID,
+  
   // Utility to check if Appwrite is properly configured
   isAppwriteConfigured() {
     return !!APPWRITE_CONFIG.projectId && !!APPWRITE_CONFIG.endpoint;
@@ -44,7 +53,17 @@ export const appwrite = {
         DATABASE_ID,
         CLIENTS_COLLECTION_ID
       );
-      return response.documents;
+      
+      // Format the client data to match our app's format
+      return response.documents.map(doc => ({
+        id: doc.$id,
+        name: doc.name,
+        email: doc.email,
+        additionalEmails: doc.additional_emails || [],
+        phone: doc.phone,
+        address: doc.address,
+        notes: doc.notes
+      }));
     } catch (error) {
       console.error('Error fetching clients:', error);
       return [];
@@ -53,22 +72,27 @@ export const appwrite = {
   
   async createClient(client) {
     try {
-      const clientId = client.id || ID.unique();
+      const clientId = ID.unique();
       const now = new Date().toISOString();
+      
+      // Format the client data for Appwrite
+      const clientData = {
+        name: client.name,
+        email: client.email,
+        additional_emails: client.additionalEmails || [],
+        phone: client.phone,
+        address: client.address,
+        notes: client.notes || "",
+        created_at: now
+      };
+      
       const response = await databases.createDocument(
         DATABASE_ID,
         CLIENTS_COLLECTION_ID,
         clientId,
-        {
-          name: client.name,
-          email: client.email,
-          additional_emails: client.additionalEmails || [],
-          phone: client.phone,
-          address: client.address,
-          notes: client.notes,
-          created_at: now
-        }
+        clientData
       );
+      
       return response;
     } catch (error) {
       console.error('Error creating client:', error);
@@ -78,20 +102,24 @@ export const appwrite = {
   
   async updateClient(clientId, clientData) {
     try {
+      // Format the data properly for Appwrite
+      const appwriteClientData = {
+        name: clientData.name,
+        email: clientData.email,
+        additional_emails: Array.isArray(clientData.additionalEmails) ? clientData.additionalEmails : [],
+        phone: clientData.phone,
+        address: clientData.address,
+        notes: clientData.notes || "",
+        updated_at: new Date().toISOString()
+      };
+      
       const response = await databases.updateDocument(
         DATABASE_ID,
         CLIENTS_COLLECTION_ID,
         clientId,
-        {
-          name: clientData.name,
-          email: clientData.email,
-          additional_emails: clientData.additionalEmails || [],
-          phone: clientData.phone,
-          address: clientData.address,
-          notes: clientData.notes,
-          updated_at: new Date().toISOString()
-        }
+        appwriteClientData
       );
+      
       return response;
     } catch (error) {
       console.error('Error updating client:', error);

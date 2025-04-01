@@ -1,863 +1,241 @@
 import React, { useState, useEffect } from "react";
-import { 
-  Card, 
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle
-} from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
+import { PlusCircle, Briefcase, FileText } from "lucide-react";
+import { Dialog, DialogTrigger, DialogContent } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import { toast } from "sonner";
-import {
-  Plus,
-  FileEdit,
-  Trash2,
-  Clock,
-  Upload,
-  File,
-  Paperclip,
-  Home,
-  Building,
-  MapPin,
-  ExternalLink
-} from "lucide-react";
+import ClientDocuments from "./ClientDocuments";
+import * as appwriteStorage from "@/utils/appwriteStorage";
 import { appwrite } from "@/lib/appwrite";
-import { uploadClientDocument, getClientDocuments, getDocumentUrl, deleteClientDocument } from "@/utils/appwriteStorage";
-import ClientDocuments from "@/components/ClientDocuments";
 import { useIsMobile } from "@/hooks/use-mobile";
-
-interface ClientCase {
-  $id: string;
-  clientId: string;
-  caseNumber: string;
-  caseName: string | null;
-  description: string | null;
-  status: string;
-  createdAt: string;
-  updatedAt: string;
-  homeAddress?: string;
-  workAddress?: string;
-}
+import ResponsiveDialog from "./ResponsiveDialog";
 
 interface ClientCasesProps {
   clientId: string;
-  clientName: string;
+  clientName?: string;
 }
 
 export default function ClientCases({ clientId, clientName }: ClientCasesProps) {
-  const [cases, setCases] = useState<ClientCase[]>([]);
+  const [activeTab, setActiveTab] = useState<string>("cases");
+  const [cases, setCases] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [addCaseDialogOpen, setAddCaseDialogOpen] = useState(false);
-  const [editCaseDialogOpen, setEditCaseDialogOpen] = useState(false);
-  const [deleteCaseDialogOpen, setDeleteCaseDialogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("cases");
-  const [activeCase, setActiveCase] = useState<string | null>(null);
-  const isMobile = useIsMobile();
-  
   const [caseNumber, setCaseNumber] = useState("");
   const [caseName, setCaseName] = useState("");
-  const [description, setDescription] = useState("");
-  const [homeAddress, setHomeAddress] = useState("");
-  const [workAddress, setWorkAddress] = useState("");
-  const [status, setStatus] = useState("Active");
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [selectedCase, setSelectedCase] = useState<ClientCase | null>(null);
-  
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [fileDescription, setFileDescription] = useState("");
-  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [documents, setDocuments] = useState<UploadedDocument[]>([]);
-  const [viewDocumentUrl, setViewDocumentUrl] = useState<string | null>(null);
-  const [viewDocumentName, setViewDocumentName] = useState("");
-  const [viewDocumentDialogOpen, setViewDocumentDialogOpen] = useState(false);
-  const [deleteDocumentId, setDeleteDocumentId] = useState<string | null>(null);
-  const [deleteDocumentPath, setDeleteDocumentPath] = useState<string | null>(null);
-  const [deleteDocumentDialogOpen, setDeleteDocumentDialogOpen] = useState(false);
+  const [courtName, setCourtName] = useState("");
+  const [caseNotes, setCaseNotes] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isMobile = useIsMobile();
+  const { toast } = useToast();
 
   useEffect(() => {
-    const fetchCases = async () => {
+    const loadCases = async () => {
       setIsLoading(true);
       try {
-        const cases = await appwrite.getClientCases(clientId);
-        
-        setCases(cases);
-        
-        if (cases.length > 0 && !activeCase) {
-          setActiveCase(cases[0].$id);
-        }
+        const clientCases = await appwriteStorage.getClientCases(clientId);
+        setCases(clientCases);
       } catch (error) {
-        console.error("Error fetching client cases:", error);
-        toast.error("Error fetching cases", {
-          description: "There was a problem loading cases for this client."
+        console.error("Error loading cases:", error);
+        toast({
+          title: "Error loading cases",
+          description: error instanceof Error ? error.message : "An error occurred",
+          variant: "destructive",
         });
       } finally {
         setIsLoading(false);
       }
     };
-    
-    fetchCases();
-    
-    const handleCasesUpdated = () => {
-      console.log("Cases updated event received, refreshing cases");
-      fetchCases();
-    };
 
-    window.addEventListener('cases-updated', handleCasesUpdated);
-    
-    return () => {
-      window.removeEventListener('cases-updated', handleCasesUpdated);
-    };
-  }, [clientId, activeCase]);
-
-  const resetForm = () => {
-    setCaseNumber("");
-    setCaseName("");
-    setDescription("");
-    setHomeAddress("");
-    setWorkAddress("");
-    setStatus("Active");
-    setSelectedCase(null);
-    setSelectedFile(null);
-    setFileDescription("");
-  };
-
-  const handleAddCase = async () => {
-    if (!caseNumber.trim()) {
-      toast.error("Case number is required");
-      return;
+    if (clientId) {
+      loadCases();
     }
+  }, [clientId, toast]);
 
-    setIsSaving(true);
-    
-    try {
-      const newCase = await appwrite.createClientCase({
-        clientId,
-        caseNumber,
-        caseName,
-        courtName: description,
-        status,
-        homeAddress,
-        workAddress
-      });
-      
-      toast.success("Case added", {
-        description: "New case has been created successfully"
-      });
-      
-      setCases(prev => [...prev, newCase]);
-      setActiveCase(newCase.$id);
-      setAddCaseDialogOpen(false);
-      
-      resetForm();
-    } catch (error) {
-      console.error("Error adding case:", error);
-      toast.error("Error adding case", {
-        description: "Failed to create the new case"
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleUpdateCase = async () => {
-    if (!selectedCase) return;
-    
-    setIsSaving(true);
-    
-    try {
-      const updatedCase = await appwrite.updateClientCase(selectedCase.$id, {
-        caseNumber,
-        caseName,
-        courtName: description,
-        status,
-        homeAddress,
-        workAddress
-      });
-      
-      setCases(prevCases => 
-        prevCases.map(c => c.$id === selectedCase.$id ? updatedCase : c)
-      );
-      
-      setEditCaseDialogOpen(false);
-      resetForm();
-      
-      toast.success("Case updated", {
-        description: "Case information has been updated."
-      });
-    } catch (error) {
-      console.error("Error updating case:", error);
-      toast.error("Error updating case", {
-        description: "There was a problem updating the case."
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleDeleteCase = async () => {
-    if (!selectedCase) return;
-    
-    try {
-      await appwrite.deleteClientCase(selectedCase.$id);
-      
-      setCases(prevCases => prevCases.filter(c => c.$id !== selectedCase.$id));
-      
-      if (activeCase === selectedCase.$id) {
-        const remainingCases = cases.filter(c => c.$id !== selectedCase.$id);
-        setActiveCase(remainingCases.length > 0 ? remainingCases[0].$id : null);
-      }
-      
-      setDeleteCaseDialogOpen(false);
-      resetForm();
-      
-      toast.success("Case deleted", {
-        description: "Case has been permanently removed."
-      });
-    } catch (error) {
-      console.error("Error deleting case:", error);
-      toast.error("Error deleting case", {
-        description: "There was a problem deleting the case."
-      });
-    }
-  };
-
-  const handleEditCase = (clientCase: ClientCase) => {
-    setSelectedCase(clientCase);
-    setCaseNumber(clientCase.caseNumber);
-    setCaseName(clientCase.caseName);
-    setDescription(clientCase.description);
-    setHomeAddress(clientCase.homeAddress || "");
-    setWorkAddress(clientCase.workAddress || "");
-    setStatus(clientCase.status);
-    setEditCaseDialogOpen(true);
-  };
-
-  const handleDeleteCaseButton = (clientCase: ClientCase) => {
-    setSelectedCase(clientCase);
-    setDeleteCaseDialogOpen(true);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setSelectedFile(e.target.files[0]);
-    }
-  };
-
-  const handleUploadDocument = async (e: React.FormEvent) => {
+  const handleAddCase = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!selectedFile || !activeCase) return;
-    
-    setIsUploading(true);
-    
-    try {
-      const activeClientCase = cases.find(c => c.$id === activeCase);
-      if (!activeClientCase) throw new Error("Case not found");
-      
-      const document = await uploadClientDocument(
-        clientId,
-        selectedFile,
-        activeClientCase.caseNumber,
-        fileDescription
-      );
-      
-      if (!document) throw new Error("Upload failed");
-      
-      const documents = await getClientDocuments(clientId);
-      setDocuments(documents);
-      
-      setUploadDialogOpen(false);
-      setSelectedFile(null);
-      setFileDescription("");
-      
-      toast.success("Document uploaded", {
-        description: "Document has been successfully uploaded."
+    if (!caseNumber) {
+      toast({
+        title: "Missing information",
+        description: "Case number is required",
+        variant: "destructive",
       });
-    } catch (error) {
-      console.error("Error uploading document:", error);
-      toast.error("Error uploading document", {
-        description: "There was a problem uploading the document."
-      });
-    } finally {
-      setIsUploading(false);
+      return;
     }
-  };
-
-  const handleViewDocument = async (doc: UploadedDocument) => {
+    
+    setIsSubmitting(true);
+    
     try {
-      const url = await getDocumentUrl(doc.filePath);
-      if (url) {
-        setViewDocumentUrl(url);
-        setViewDocumentName(doc.fileName);
-        setViewDocumentDialogOpen(true);
-      } else {
-        throw new Error("Could not get document URL");
+      const newCase = {
+        clientId,
+        caseNumber,
+        caseName: caseName || undefined,
+        courtName: courtName || undefined,
+        notes: caseNotes || undefined,
+      };
+      
+      const result = await appwrite.createClientCase(newCase);
+      
+      if (result) {
+        setCases([...cases, {...newCase, id: result.$id}]);
+        
+        setAddCaseDialogOpen(false);
+        setCaseNumber("");
+        setCaseName("");
+        setCourtName("");
+        setCaseNotes("");
+        
+        toast({
+          title: "Case added",
+          description: "New case has been added successfully",
+          variant: "success",
+        });
       }
     } catch (error) {
-      console.error("Error viewing document:", error);
-      toast.error("Error viewing document", {
-        description: "There was a problem accessing the document."
+      console.error("Error adding case:", error);
+      toast({
+        title: "Error adding case",
+        description: error instanceof Error ? error.message : "An error occurred",
+        variant: "destructive",
       });
-    }
-  };
-
-  const handleDeleteDocumentButton = (id: string, filePath: string) => {
-    setDeleteDocumentId(id);
-    setDeleteDocumentPath(filePath);
-    setDeleteDocumentDialogOpen(true);
-  };
-
-  const handleDeleteDocument = async () => {
-    if (!deleteDocumentId || !deleteDocumentPath) return;
-    
-    try {
-      const success = await deleteClientDocument(deleteDocumentId, deleteDocumentPath);
-      
-      if (!success) throw new Error("Delete failed");
-      
-      const documents = await getClientDocuments(clientId);
-      setDocuments(documents);
-      
-      setDeleteDocumentDialogOpen(false);
-      setDeleteDocumentId(null);
-      setDeleteDocumentPath(null);
-      
-      toast.success("Document deleted", {
-        description: "Document has been permanently removed."
-      });
-    } catch (error) {
-      console.error("Error deleting document:", error);
-      toast.error("Error deleting document", {
-        description: "There was a problem deleting the document."
-      });
-    }
-  };
-
-  const getActiveCase = () => {
-    return cases.find(c => c.$id === activeCase);
-  };
-
-  const getMapLink = (address: string) => {
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
-  };
-
-  const handleAddressClick = (address: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    window.open(getMapLink(address), '_blank', 'noopener,noreferrer');
-    toast.success("Opening map", {
-      description: "Opening address location in Google Maps"
-    });
-  };
-
-  const handleUploadFromEditDialog = () => {
-    if (selectedCase) {
-      setActiveCase(selectedCase.$id);
-      setEditCaseDialogOpen(false);
-      setUploadDialogOpen(true);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="space-y-6">
-      <Tabs defaultValue="cases" value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
+        <TabsList className="h-auto">
           <TabsTrigger value="cases">Cases</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
         </TabsList>
         
-        <TabsContent value="cases" className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-bold truncate">{clientName}'s Cases</h2>
-            
-            <Dialog open={addCaseDialogOpen} onOpenChange={setAddCaseDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Case
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="h-[95vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Add New Case</DialogTitle>
-                  <DialogDescription>
-                    Enter the details for a new case for {clientName}
-                  </DialogDescription>
-                </DialogHeader>
-                
-                <form onSubmit={(e) => {
-                  e.preventDefault();
-                  handleAddCase();
-                }}>
-                  <div className="grid gap-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="case-number">Case Number</Label>
-                      <Input
-                        id="case-number"
-                        value={caseNumber}
-                        onChange={(e) => setCaseNumber(e.target.value)}
-                        placeholder="e.g., CV-2023-0001"
-                        required
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="case-name">To Be Served</Label>
-                      <Input
-                        id="case-name"
-                        value={caseName}
-                        onChange={(e) => setCaseName(e.target.value)}
-                        placeholder="e.g., John Doe"
-                      />
-                    </div>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="home-address">Home Address</Label>
-                        <Input
-                          id="home-address"
-                          value={homeAddress}
-                          onChange={(e) => setHomeAddress(e.target.value)}
-                          placeholder="Enter home address"
-                        />
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="work-address">Work Address</Label>
-                        <Input
-                          id="work-address"
-                          value={workAddress}
-                          onChange={(e) => setWorkAddress(e.target.value)}
-                          placeholder="Enter work address"
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="description">Notes</Label>
-                      <Textarea
-                        id="description"
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        placeholder="Additional case information"
-                        rows={3}
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="status">Status</Label>
-                      <Select value={status} onValueChange={setStatus}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Active">Active</SelectItem>
-                          <SelectItem value="Pending">Pending</SelectItem>
-                          <SelectItem value="Closed">Closed</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  
-                  <DialogFooter className="mt-8">
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      onClick={() => {
-                        resetForm();
-                        setAddCaseDialogOpen(false);
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={isSaving}>
-                      {isSaving ? "Saving..." : "Add Case"}
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
-          
-          {isLoading ? (
-            <div className="text-center py-10">
-              <div role="status" className="inline-block">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" />
-                <span className="sr-only">Loading...</span>
-              </div>
-              <p className="mt-2 text-muted-foreground">Loading cases...</p>
+        <ResponsiveDialog
+          open={addCaseDialogOpen}
+          onOpenChange={setAddCaseDialogOpen}
+          trigger={
+            <Button>
+              <PlusCircle className="h-4 w-4 mr-2" />
+              Add Case
+            </Button>
+          }
+          title="Add New Case"
+          description={`Add a new case for ${clientName}`}
+        >
+          <form onSubmit={handleAddCase} className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="caseNumber">Case Number</Label>
+              <Input
+                id="caseNumber"
+                value={caseNumber}
+                onChange={(e) => setCaseNumber(e.target.value)}
+                required
+              />
             </div>
-          ) : cases.length === 0 ? (
-            <Card>
-              <CardContent className="py-10 text-center">
-                <p className="text-muted-foreground mb-4">No cases found for this client.</p>
-                <Button 
-                  variant="outline" 
-                  onClick={() => setAddCaseDialogOpen(true)}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add First Case
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            <>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
-                {cases.map((c) => (
-                  <Card 
-                    key={c.$id} 
-                    className={`overflow-hidden cursor-pointer transition-all hover:shadow-md w-full ${activeCase === c.$id ? 'ring-2 ring-primary' : ''}`}
-                    onClick={() => setActiveCase(c.$id)}
-                  >
-                    <CardHeader className="pb-2">
-                      <div className="flex justify-between">
-                        <CardTitle className="flex-1 truncate">
-                          {c.caseName || c.caseNumber}
-                        </CardTitle>
-                        
-                        <div className="flex items-center gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEditCase(c);
-                            }}
-                          >
-                            <FileEdit className="h-4 w-4" />
-                          </Button>
-                          
-                          <Button 
-                            variant="ghost" 
-                            size="icon"
-                            className="h-8 w-8 text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteCaseButton(c);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                      
-                      <CardDescription className="flex items-center justify-between">
-                        <span className="truncate">Case #{c.caseNumber}</span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          c.status === 'Active' ? 'bg-green-100 text-green-800' :
-                          c.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {c.status}
-                        </span>
-                      </CardDescription>
+            
+            <div className="space-y-2">
+              <Label htmlFor="caseName">Case Name (Optional)</Label>
+              <Input
+                id="caseName"
+                value={caseName}
+                onChange={(e) => setCaseName(e.target.value)}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="courtName">Court Name (Optional)</Label>
+              <Input
+                id="courtName"
+                value={courtName}
+                onChange={(e) => setCourtName(e.target.value)}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="caseNotes">Notes (Optional)</Label>
+              <Textarea
+                id="caseNotes"
+                value={caseNotes}
+                onChange={(e) => setCaseNotes(e.target.value)}
+                rows={3}
+              />
+            </div>
+            
+            <div className="flex justify-end gap-2 mt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAddCaseDialogOpen(false)}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Adding..." : "Add Case"}
+              </Button>
+            </div>
+          </form>
+        </ResponsiveDialog>
+      </div>
+      
+      <TabsContent value="cases" className="mt-0">
+        <Card className="neo-card">
+          <CardHeader>
+            <CardTitle>Client Cases</CardTitle>
+            <CardDescription>
+              Manage cases associated with this client
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="text-center py-8">
+                Loading cases...
+              </div>
+            ) : cases.length === 0 ? (
+              <div className="text-center py-8">
+                No cases added yet.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {cases.map((caseItem) => (
+                  <Card key={caseItem.caseNumber} className="neo-card">
+                    <CardHeader>
+                      <CardTitle className="flex items-center">
+                        <Briefcase className="h-4 w-4 mr-2" />
+                        {caseItem.caseName ? `${caseItem.caseNumber} - ${caseItem.caseName}` : caseItem.caseNumber}
+                      </CardTitle>
                     </CardHeader>
-                    
-                    <CardContent className="pb-3">
-                      {c.description && (
-                        <div className="space-y-2">
-                          <h4 className="font-medium">Notes</h4>
-                          <p className="text-sm text-muted-foreground line-clamp-2 whitespace-pre-wrap">{c.description}</p>
-                        </div>
-                      )}
-                      
-                      {(c.homeAddress || c.workAddress) && (
-                        <div className="space-y-2 mt-2">
-                          <h4 className="font-medium">Addresses</h4>
-                          <div className="space-y-2">
-                            {c.homeAddress && (
-                              <a 
-                                href={getMapLink(c.homeAddress)}
-                                className="text-sm text-primary hover:underline flex items-center group"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => handleAddressClick(c.homeAddress, e)}
-                              >
-                                <Home className="h-3 w-3 mr-1 inline flex-shrink-0" />
-                                <span className="flex-1 truncate">{c.homeAddress}</span>
-                                <ExternalLink className="h-3 w-3 ml-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
-                              </a>
-                            )}
-                            
-                            {c.workAddress && (
-                              <a 
-                                href={getMapLink(c.workAddress)}
-                                className="text-sm text-primary hover:underline flex items-center group"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => handleAddressClick(c.workAddress, e)}
-                              >
-                                <Building className="h-3 w-3 mr-1 inline flex-shrink-0" />
-                                <span className="flex-1 truncate">{c.workAddress}</span>
-                                <ExternalLink className="h-3 w-3 ml-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      
-                      <div className="flex items-center space-x-2 mt-3 text-xs text-muted-foreground">
-                        <Clock className="h-3 w-3 flex-shrink-0" />
-                        <span>Created {new Date(c.createdAt).toLocaleDateString()}</span>
+                    <CardContent>
+                      <div className="text-sm text-muted-foreground">
+                        Court: {caseItem.courtName || "N/A"}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Notes: {caseItem.notes || "N/A"}
                       </div>
                     </CardContent>
                   </Card>
                 ))}
               </div>
-              
-              {activeCase && (
-                <Card className="mt-6">
-                  <CardHeader>
-                    <div className="flex justify-between items-center">
-                      <CardTitle className="truncate">
-                        {getActiveCase()?.caseName || getActiveCase()?.caseNumber}
-                      </CardTitle>
-                    </div>
-                    <CardDescription className="flex items-center justify-between">
-                      <span>
-                        Case #{getActiveCase()?.caseNumber} - 
-                        <span className={`ml-2 ${
-                          getActiveCase()?.status === 'Active' ? 'text-green-600' :
-                          getActiveCase()?.status === 'Pending' ? 'text-yellow-600' :
-                          'text-gray-600'
-                        }`}>
-                          {getActiveCase()?.status}
-                        </span>
-                      </span>
-                    </CardDescription>
-                  </CardHeader>
-                  
-                  <CardContent>
-                    <div className="space-y-6">
-                      <ClientDocuments 
-                        clientId={clientId}
-                        caseNumber={getActiveCase()?.caseNumber}
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </>
-          )}
-        </TabsContent>
-        
-        <TabsContent value="documents">
-          <ClientDocuments 
-            clientId={clientId}
-          />
-        </TabsContent>
-      </Tabs>
+            )}
+          </CardContent>
+        </Card>
+      </TabsContent>
       
-      <Dialog open={editCaseDialogOpen} onOpenChange={setEditCaseDialogOpen}>
-        <DialogContent className="h-[95vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex justify-between items-center">
-              <span>Edit Case</span>
-            </DialogTitle>
-            <DialogDescription>
-              Update case information
-            </DialogDescription>
-          </DialogHeader>
-          
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            handleUpdateCase();
-          }}>
-            <div className="grid gap-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-case-number">Case Number</Label>
-                <Input
-                  id="edit-case-number"
-                  value={caseNumber}
-                  onChange={(e) => setCaseNumber(e.target.value)}
-                  placeholder="e.g., CV-2023-0001"
-                  required
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="edit-case-name">To Be Served</Label>
-                <Input
-                  id="edit-case-name"
-                  value={caseName}
-                  onChange={(e) => setCaseName(e.target.value)}
-                  placeholder="e.g., John Doe"
-                />
-              </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-home-address">Home Address</Label>
-                  <Input
-                    id="edit-home-address"
-                    value={homeAddress}
-                    onChange={(e) => setHomeAddress(e.target.value)}
-                    placeholder="Enter home address"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="edit-work-address">Work Address</Label>
-                  <Input
-                    id="edit-work-address"
-                    value={workAddress}
-                    onChange={(e) => setWorkAddress(e.target.value)}
-                    placeholder="Enter work address"
-                  />
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="edit-description">Notes</Label>
-                <Textarea
-                  id="edit-description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Additional case information"
-                  rows={3}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="edit-status">Status</Label>
-                <Select value={status} onValueChange={setStatus}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Active">Active</SelectItem>
-                    <SelectItem value="Pending">Pending</SelectItem>
-                    <SelectItem value="Closed">Closed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            
-            <DialogFooter className="mt-8">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => {
-                  resetForm();
-                  setEditCaseDialogOpen(false);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSaving}>
-                {isSaving ? "Saving..." : "Update Case"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-      
-      <AlertDialog open={deleteCaseDialogOpen} onOpenChange={setDeleteCaseDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Case</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this case? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => {
-              setSelectedCase(null);
-              setDeleteCaseDialogOpen(false);
-            }}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteCase} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      
-      <Dialog open={viewDocumentDialogOpen} onOpenChange={setViewDocumentDialogOpen}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{viewDocumentName}</DialogTitle>
-          </DialogHeader>
-          {viewDocumentUrl && (
-            <div className="w-full max-h-[70vh] overflow-auto border rounded-lg">
-              <iframe
-                src={viewDocumentUrl}
-                className="w-full h-[70vh]"
-                title="Document Preview"
-              />
-            </div>
-          )}
-          <DialogFooter>
-            <a
-              href={viewDocumentUrl || "#"}
-              download={viewDocumentName}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
-            >
-              Download
-            </a>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      <AlertDialog open={deleteDocumentDialogOpen} onOpenChange={setDeleteDocumentDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Document</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this document? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => {
-              setDeleteDocumentId(null);
-              setDeleteDocumentPath(null);
-              setDeleteDocumentDialogOpen(false);
-            }}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteDocument} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+      <TabsContent value="documents" className="mt-0">
+        <ClientDocuments clientId={clientId} clientName={clientName} />
+      </TabsContent>
+    </Tabs>
   );
 }

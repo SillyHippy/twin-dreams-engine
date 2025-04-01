@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { PlusCircle, Users, Pencil, Trash2, UserCheck, ArrowLeft } from "lucide-react";
@@ -39,13 +40,15 @@ interface ClientsProps {
   addClient: (client: ClientData) => void;
   updateClient: (client: ClientData) => void;
   deleteClient: (clientId: string) => Promise<boolean>;
+  onSelectClient?: (id: any) => void;
 }
 
 const Clients: React.FC<ClientsProps> = ({ 
   clients, 
   addClient, 
   updateClient, 
-  deleteClient 
+  deleteClient,
+  onSelectClient 
 }) => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [deleteClientId, setDeleteClientId] = useState<string | null>(null);
@@ -58,22 +61,36 @@ const Clients: React.FC<ClientsProps> = ({
   const handleAddClient = async (client: ClientData) => {
     setIsLoading(true);
     
-    const newClientId = `client-${Date.now()}`;
-    const newClient = {
-      ...client,
-      id: newClientId,
-    };
-    
     try {
-      // Use Appwrite to add client
-      const success = await appwrite.database.createDocument("clients", newClientId, newClient);
+      // Create a properly formatted client object
+      const newClientData = {
+        id: client.id || undefined, // Let Appwrite generate ID if none provided
+        name: client.name,
+        email: client.email,
+        additionalEmails: client.additionalEmails || [],
+        phone: client.phone,
+        address: client.address,
+        notes: client.notes || "",
+      };
+      
+      // Use the addClient function passed as prop (connects to Appwrite)
+      const success = await addClient(newClientData);
       
       if (success) {
-        addClient(newClient);
         setIsAddDialogOpen(false);
+        toast({
+          title: "Client added",
+          description: "New client has been created successfully",
+          variant: "default"
+        });
       }
     } catch (error) {
       console.error("Error adding client:", error);
+      toast({
+        title: "Error adding client",
+        description: error instanceof Error ? error.message : "Unknown error occurred",
+        variant: "destructive"
+      });
     } finally {
       setIsLoading(false);
     }
@@ -83,14 +100,15 @@ const Clients: React.FC<ClientsProps> = ({
     setIsLoading(true);
     
     try {
-      // Use Appwrite to update client
-      const success = await appwrite.database.updateDocument("clients", client.id, client);
-      
-      if (success) {
-        updateClient(client);
-      }
+      // Call the update function passed in props
+      await updateClient(client);
     } catch (error) {
       console.error("Error updating client:", error);
+      toast({
+        title: "Error updating client",
+        description: error instanceof Error ? error.message : "Unknown error updating client",
+        variant: "destructive"
+      });
     } finally {
       setIsLoading(false);
     }
@@ -100,7 +118,7 @@ const Clients: React.FC<ClientsProps> = ({
     if (deleteClientId) {
       setIsLoading(true);
       try {
-        // Let App.tsx handle the deletion, it uses Appwrite now
+        // Call the delete function passed in props
         const success = await deleteClient(deleteClientId);
         
         if (success) {
@@ -109,20 +127,20 @@ const Clients: React.FC<ClientsProps> = ({
             description: "Client has been successfully removed",
             variant: "success"
           });
-        }
-        
-        // Update local state
-        if (selectedClient?.id === deleteClientId) {
-          setSelectedClient(null);
-          setIsDetailView(false);
+          
+          // Update local state
+          if (selectedClient?.id === deleteClientId) {
+            setSelectedClient(null);
+            setIsDetailView(false);
+          }
         }
         
         setDeleteClientId(null);
       } catch (error) {
-        console.error("Error in client deletion process:", error);
+        console.error("Error deleting client:", error);
         toast({
-          title: "Error",
-          description: "An error occurred while deleting the client",
+          title: "Error deleting client",
+          description: error instanceof Error ? error.message : "Unknown error deleting client",
           variant: "destructive"
         });
       } finally {
@@ -132,8 +150,12 @@ const Clients: React.FC<ClientsProps> = ({
   };
 
   const handleSelectClient = (client: ClientData) => {
-    setSelectedClient(client);
-    setIsDetailView(true);
+    if (onSelectClient) {
+      onSelectClient(client.id);
+    } else {
+      setSelectedClient(client);
+      setIsDetailView(true);
+    }
   };
 
   const handleBackToList = () => {

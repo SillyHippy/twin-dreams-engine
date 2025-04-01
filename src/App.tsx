@@ -57,23 +57,20 @@ const AnimatedRoutes = () => {
   const [dataLoaded, setDataLoaded] = useState(false);
   const [showAppwriteAlert, setShowAppwriteAlert] = useState(false);
 
-  // Check Appwrite connection on mount
   useEffect(() => {
     const checkBackend = async () => {
       const isAppwriteConnected = await checkAppwriteConnection();
       if (isAppwriteConnected) {
         console.log("Using Appwrite as primary backend");
-        // Set up Appwrite real-time subscription
         const cleanup = appwrite.setupRealtimeSubscription((response) => {
           console.log("Received real-time update from Appwrite:", response);
-          // Refresh data when changes happen
           loadAppwriteData();
         });
         return cleanup;
       } else {
         console.log("Failed to connect to Appwrite, using local storage fallback");
         setShowAppwriteAlert(true);
-        return () => {}; // No cleanup needed for fallback
+        return () => {};
       }
     };
     checkBackend();
@@ -117,9 +114,7 @@ const AnimatedRoutes = () => {
     performInitialSync();
   }, [isInitialSync]);
 
-  // Set up periodic sync with Appwrite
   useEffect(() => {
-    // Set up Appwrite sync interval
     const syncInterval = setInterval(async () => {
       try {
         console.log("Running periodic sync with Appwrite...");
@@ -133,30 +128,39 @@ const AnimatedRoutes = () => {
     };
   }, []);
 
-  // Save clients to localStorage when they change
   useEffect(() => {
     localStorage.setItem("serve-tracker-clients", JSON.stringify(clients));
     console.log("Updated localStorage serve-tracker-clients:", clients.length, "clients");
   }, [clients]);
 
-  // Save serves to localStorage when they change
   useEffect(() => {
     localStorage.setItem("serve-tracker-serves", JSON.stringify(serves));
     console.log("Updated localStorage serve-tracker-serves:", serves.length, "entries");
   }, [serves]);
 
-  // Create a new client
   const createClient = async (client) => {
     try {
       console.log("Creating new client in Appwrite:", client);
-      const newClient = await appwrite.createClient(client);
+      
+      const clientData = {
+        name: client.name,
+        email: client.email,
+        additionalEmails: client.additionalEmails || [],
+        phone: client.phone,
+        address: client.address,
+        notes: client.notes || ""
+      };
+      
+      const newClient = await appwrite.createClient(clientData);
+      
       if (newClient) {
         toast({
           title: "Client created",
           description: "New client has been added successfully",
           variant: "success",
         });
-        const clientData = {
+        
+        const formattedClient = {
           id: newClient.$id,
           name: newClient.name,
           email: newClient.email,
@@ -165,11 +169,14 @@ const AnimatedRoutes = () => {
           address: newClient.address,
           notes: newClient.notes,
         };
-        setClients(prev => [...prev, clientData]);
+        
+        setClients(prev => [...prev, formattedClient]);
+        
         setTimeout(() => {
           loadAppwriteData();
         }, 500);
-        return clientData;
+        
+        return formattedClient;
       }
     } catch (error) {
       console.error("Error creating client in Appwrite:", error);
@@ -182,30 +189,37 @@ const AnimatedRoutes = () => {
     }
   };
 
-  // Update an existing client
   const updateClient = async (updatedClient) => {
     try {
       console.log("Updating client in Appwrite:", updatedClient);
-      const result = await appwrite.updateClient(updatedClient.id, {
+      
+      const clientData = {
         name: updatedClient.name,
         email: updatedClient.email,
-        additionalEmails: updatedClient.additionalEmails || [],
+        additional_emails: updatedClient.additionalEmails || [],
         phone: updatedClient.phone,
         address: updatedClient.address,
-        notes: updatedClient.notes,
-      });
+        notes: updatedClient.notes || ""
+      };
+      
+      const result = await appwrite.updateClient(updatedClient.id, clientData);
+      
       if (result) {
         toast({
           title: "Client updated",
           description: "Client has been successfully updated",
           variant: "success",
         });
+        
         setClients(prev => prev.map(client => 
           client.id === updatedClient.id ? updatedClient : client
         ));
+        
         setTimeout(() => {
           loadAppwriteData();
         }, 500);
+        
+        return true;
       }
     } catch (error) {
       console.error("Error updating client in Appwrite:", error);
@@ -214,24 +228,21 @@ const AnimatedRoutes = () => {
         description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       });
+      return false;
     }
   };
 
-  // Delete a client
   const deleteClient = async (clientId) => {
     try {
-      // Delete associated serve attempts
       const serveAttempts = await appwrite.getServeAttempts();
       const clientServes = serveAttempts.filter(serve => serve.clientId === clientId);
       for (const serve of clientServes) {
         await appwrite.deleteServeAttempt(serve.$id);
       }
-      // Delete associated documents
       const documents = await appwrite.getClientDocuments(clientId);
       for (const doc of documents) {
         await appwrite.deleteClientDocument(doc.$id, doc.filePath);
       }
-      // Delete the client
       await appwrite.deleteClient(clientId);
       setClients(prev => prev.filter(client => client.id !== clientId));
       setServes(prev => prev.filter(serve => serve.clientId !== clientId));
@@ -255,7 +266,6 @@ const AnimatedRoutes = () => {
     }
   };
 
-  // Create a new serve attempt
   const addServe = async (serveData) => {
     try {
       const newServe = await appwrite.createServeAttempt({
@@ -292,7 +302,6 @@ const AnimatedRoutes = () => {
     }
   };
 
-  // Update a serve attempt
   const updateServe = async (serveData) => {
     try {
       const updatedServe = await appwrite.updateServeAttempt(serveData.id, {
@@ -320,7 +329,6 @@ const AnimatedRoutes = () => {
     }
   };
 
-  // Delete a serve attempt
   const deleteServe = async (serveId) => {
     try {
       await appwrite.deleteServeAttempt(serveId);
