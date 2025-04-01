@@ -115,6 +115,8 @@ const Clients: React.FC<ClientsProps> = ({
     if (deleteClientId) {
       setIsLoading(true);
       try {
+        // Call the deleteClient function that's passed as a prop
+        // This is the function from App.tsx that handles deleting from Appwrite
         const success = await deleteClient(deleteClientId);
         
         if (success) {

@@ -133,11 +133,30 @@ export const appwrite = {
     try {
       console.log("Deleting client with ID:", clientId);
       
+      // First get all client cases
+      const cases = await this.getClientCases(clientId);
+      // Delete each case
+      for (const caseItem of cases) {
+        if (caseItem.id) {
+          await this.deleteClientCase(caseItem.id);
+        }
+      }
+      
+      // Delete any documents associated with this client
+      const documents = await this.getClientDocuments(clientId);
+      for (const doc of documents) {
+        if (doc.$id) {
+          await this.deleteClientDocument(doc.$id, doc.filePath);
+        }
+      }
+      
+      // Finally delete the client itself
       await databases.deleteDocument(
         DATABASE_ID,
         CLIENTS_COLLECTION_ID,
         clientId
       );
+      
       return true;
     } catch (error) {
       console.error('Error deleting client:', error);

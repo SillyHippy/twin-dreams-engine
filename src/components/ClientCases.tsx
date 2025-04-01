@@ -78,9 +78,9 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
     setIsSubmitting(true);
     
     try {
-      // Updated to match Appwrite attribute naming convention
+      // Ensure we're using the correct format for client_id
       const newCase = {
-        client_id: clientId,
+        client_id: clientId, // Fix: Use clientId string directly, not as an object
         case_number: caseNumber,
         case_name: caseName || "",
         courtName: courtName || "",
