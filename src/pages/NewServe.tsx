@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import ServeAttempt, { ServeAttemptData } from "@/components/ServeAttempt";
 import { ClientData } from "@/components/ClientForm";
 import { Button } from "@/components/ui/button";
@@ -10,29 +11,21 @@ import { isGeolocationCoordinates } from "@/utils/gps";
 
 interface NewServeProps {
   clients: ClientData[];
-  addServe: (serve: ServeAttemptData) => void;
+  addServe: (serve: ServeAttemptData) => Promise<boolean>;
   clientId?: string;
-  previousAttempts?: number;
 }
 
-const NewServe: React.FC<NewServeProps> = ({ 
-  clients, 
-  addServe, 
-  clientId,
-  previousAttempts = 0
-}) => {
+const NewServe: React.FC<NewServeProps> = ({ clients, addServe }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [caseAttempts, setCaseAttempts] = useState<number>(previousAttempts);
+  const [caseAttempts, setCaseAttempts] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const paramClientId = searchParams.get("clientId") || clientId;
+  const paramClientId = searchParams.get("clientId");
   const paramCaseNumber = searchParams.get("caseNumber");
   const { toast } = useToast();
 
   useEffect(() => {
     console.log("NewServe component - Initial props:", { 
-      clientId, 
-      previousAttempts, 
       paramClientId, 
       paramCaseNumber 
     });
@@ -40,8 +33,8 @@ const NewServe: React.FC<NewServeProps> = ({
 
   useEffect(() => {
     const fetchAttemptCount = async () => {
-      setIsLoading(true);
       if (paramClientId && paramCaseNumber) {
+        setIsLoading(true);
         try {
           console.log(`Fetching attempt count for client ${paramClientId} case ${paramCaseNumber}`);
           const count = await getServeAttemptsCount(paramClientId, paramCaseNumber);
@@ -50,47 +43,51 @@ const NewServe: React.FC<NewServeProps> = ({
         } catch (error) {
           console.error("Error fetching attempt count:", error);
           console.log("Could not retrieve previous serve attempts");
-          setIsLoading(false);
         } finally {
           setIsLoading(false);
         }
       } else {
         console.log("Missing clientId or caseNumber, cannot fetch attempt count");
-        setIsLoading(false);
       }
     };
     
     fetchAttemptCount();
   }, [paramClientId, paramCaseNumber]);
 
-  const handleServeComplete = async (serveData: ServeAttemptData) => {
+  const handleComplete = async (serveData: ServeAttemptData): Promise<boolean> => {
     console.log("Serve complete, data:", serveData);
     
-    if (!isGeolocationCoordinates(serveData.coordinates)) {
-      console.warn("Invalid coordinates detected, setting to null");
-      serveData.coordinates = null;
-    }
-    
-    if (serveData.clientId && serveData.caseNumber) {
-      try {
-        const statusUpdated = await updateCaseStatus(
-          serveData.clientId,
-          serveData.caseNumber,
-          serveData.status
-        );
-        
-        if (statusUpdated) {
-          console.log(`Case status updated for case ${serveData.caseNumber}`);
-        } else {
-          console.log(`Failed to update case status for case ${serveData.caseNumber}`);
-        }
-      } catch (error) {
-        console.error("Error updating case status:", error);
+    try {
+      if (!isGeolocationCoordinates(serveData.coordinates)) {
+        console.warn("Invalid coordinates detected, setting to null");
+        serveData.coordinates = null;
       }
+      
+      if (serveData.clientId && serveData.caseNumber) {
+        try {
+          const statusUpdated = await updateCaseStatus(
+            serveData.clientId,
+            serveData.caseNumber,
+            serveData.status
+          );
+          
+          if (statusUpdated) {
+            console.log(`Case status updated for case ${serveData.caseNumber}`);
+          } else {
+            console.log(`Failed to update case status for case ${serveData.caseNumber}`);
+          }
+        } catch (error) {
+          console.error("Error updating case status:", error);
+        }
+      }
+      
+      const result = await addServe(serveData);
+      navigate("/history");
+      return result;
+    } catch (error) {
+      console.error("Error in handleComplete:", error);
+      return false;
     }
-    
-    addServe(serveData);
-    navigate("/history");
   };
 
   return (
@@ -128,8 +125,10 @@ const NewServe: React.FC<NewServeProps> = ({
       ) : (
         <ServeAttempt 
           clients={clients} 
-          onComplete={handleServeComplete}
-          previousAttempts={caseAttempts}
+          addServe={handleComplete}
+          onCancel={() => navigate(-1)}
+          preselectedClientId={paramClientId || undefined}
+          caseNumber={paramCaseNumber || undefined}
         />
       )}
     </div>

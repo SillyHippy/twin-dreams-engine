@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { 
   Card, 
@@ -42,6 +43,18 @@ import { toast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ACTIVE_BACKEND, BACKEND_PROVIDER } from '@/config/backendConfig';
 import * as appwriteStorage from '@/utils/appwriteStorage';
+
+interface UploadedDocument {
+  id: string;
+  fileName: string;
+  fileSize: number;
+  filePath: string;
+  description?: string;
+  caseNumber?: string;
+  caseName?: string;
+  clientId: string;
+  uploadDate?: Date;
+}
 
 interface ClientDocumentsProps {
   clientId: string;

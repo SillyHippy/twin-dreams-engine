@@ -29,6 +29,31 @@ export const getGpsPosition = (): Promise<GeolocationPosition> => {
 };
 
 /**
+ * Checks if geolocation is available in the browser
+ * @returns Boolean indicating if geolocation is available
+ */
+export const isGeolocationAvailable = (): boolean => {
+  return !!navigator.geolocation;
+};
+
+/**
+ * Gets the current location coordinates
+ * @returns Promise with coordinates object
+ */
+export const getLocationCoordinates = async (): Promise<{latitude: number; longitude: number}> => {
+  try {
+    const position = await getGpsPosition();
+    return {
+      latitude: position.coords.latitude,
+      longitude: position.coords.longitude
+    };
+  } catch (error) {
+    console.error("Error getting location coordinates:", error);
+    throw error;
+  }
+};
+
+/**
  * Type guard to check if an object is GeolocationCoordinates
  * @param coordinates The coordinates object to check
  * @returns Boolean indicating if coordinates are valid GeolocationCoordinates

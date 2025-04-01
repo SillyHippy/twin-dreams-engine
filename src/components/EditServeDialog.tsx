@@ -25,7 +25,6 @@ import { sendEmail, createUpdateNotificationEmail } from "@/utils/email";
 import { appwrite } from "@/lib/appwrite";
 import { isGeolocationCoordinates } from "@/utils/gps";
 import { ACTIVE_BACKEND, BACKEND_PROVIDER } from "@/config/backendConfig";
-import { supabase } from "@/lib/supabase";
 
 interface EditServeDialogProps {
   serve: ServeAttemptData;
@@ -34,7 +33,9 @@ interface EditServeDialogProps {
   onSave: (updatedServe: ServeAttemptData) => Promise<boolean>;
 }
 
-const statusOptions = [
+type ServeStatus = "completed" | "failed";
+
+const statusOptions: ServeStatus[] = [
   "completed",
   "failed"
 ];
@@ -45,7 +46,7 @@ const statusDisplayMap: Record<string, string> = {
 };
 
 export default function EditServeDialog({ serve, open, onOpenChange, onSave }: EditServeDialogProps) {
-  const [status, setStatus] = useState<"completed" | "failed">(serve.status);
+  const [status, setStatus] = useState<ServeStatus>(serve.status as ServeStatus);
   const [caseNumber, setCaseNumber] = useState<string>(serve.caseNumber || "");
   const [notes, setNotes] = useState<string>(serve.notes || "");
   const [isSaving, setIsSaving] = useState(false);
@@ -54,7 +55,7 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
   const [coordinates, setCoordinates] = useState<any>(serve.coordinates || {});
 
   useEffect(() => {
-    setStatus(serve.status);
+    setStatus(serve.status as ServeStatus);
     setCaseNumber(serve.caseNumber || "");
     setNotes(serve.notes || "");
     setCoordinates(serve.coordinates || {});
@@ -175,7 +176,7 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
               <Label htmlFor="status">Status</Label>
               <Select
                 value={status}
-                onValueChange={(value: "completed" | "failed") => setStatus(value)}
+                onValueChange={(value: ServeStatus) => setStatus(value)}
               >
                 <SelectTrigger id="status">
                   <SelectValue placeholder="Select a status" />

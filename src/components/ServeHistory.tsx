@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
@@ -111,7 +112,7 @@ export default function ServeHistory({ serves, clients, onEdit, onDelete }: Serv
                 <div className="flex items-center space-x-2">
                   <User className="h-4 w-4 text-muted-foreground" />
                   <span className="font-medium">{getClientName(serve.clientId)}</span>
-                  <Badge variant={serve.status === "completed" ? "success" : "warning"}>
+                  <Badge variant={serve.status === "completed" ? "default" : "outline"}>
                     {serve.status === "completed" ? (
                       <><CheckCircle className="h-3 w-3 mr-1" /> Served</>
                     ) : (

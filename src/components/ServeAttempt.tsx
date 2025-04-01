@@ -1,6 +1,7 @@
+
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Camera as CameraIcon, MapPin, X, Send, CheckCircle, Calendar, Clock, User, FileText } from "lucide-react";
+import { Camera as CameraIcon, MapPin, X, Send, CheckCircle, Calendar as CalendarIcon, Clock, User, FileText } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -19,6 +20,10 @@ import * as appwriteStorage from "@/utils/appwriteStorage";
 import { sendEmail } from "@/utils/email";
 import { ClientData } from "./ClientForm";
 import { getLocationCoordinates, isGeolocationAvailable } from "@/utils/gps";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 export interface ServeAttemptData {
   id?: string;
@@ -28,7 +33,7 @@ export interface ServeAttemptData {
   coordinates?: {
     latitude: number;
     longitude: number;
-  };
+  } | null;
   imageData?: string | null;
   notes?: string;
   status: string;
@@ -46,7 +51,7 @@ interface ServeAttemptProps {
 
 export default function ServeAttempt({ clients, addServe, onCancel, preselectedClientId, caseNumber }: ServeAttemptProps) {
   const [clientId, setClientId] = useState(preselectedClientId || "");
-  const [timestamp, setTimestamp] = useState(new Date());
+  const [timestamp, setTimestamp] = useState<Date>(new Date());
   const [address, setAddress] = useState("");
   const [coordinates, setCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
   const [imageData, setImageData] = useState<string | null>(null);
@@ -126,7 +131,6 @@ export default function ServeAttempt({ clients, addServe, onCancel, preselectedC
         toast({
           title: "Serve Attempt Saved",
           description: "Serve attempt has been recorded",
-          variant: "success",
         });
         
         // Send email notification
@@ -195,21 +199,40 @@ export default function ServeAttempt({ clients, addServe, onCancel, preselectedC
           <div>
             <Label htmlFor="timestamp">Timestamp</Label>
             <div className="flex items-center space-x-2">
-              <Calendar
-                id="timestamp"
-                mode="single"
-                selected={timestamp}
-                onSelect={(date) => date && setTimestamp(date)}
-                className="w-full sm:w-auto"
-              />
-              <Clock
-                id="time"
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "w-full sm:w-auto justify-start text-left font-normal",
+                      !timestamp && "text-muted-foreground"
+                    )}
+                  >
+                    {timestamp ? format(timestamp, "PPP") : <span>Pick a date</span>}
+                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={timestamp}
+                    onSelect={(date) => date && setTimestamp(date)}
+                    initialFocus
+                    className="border rounded"
+                  />
+                </PopoverContent>
+              </Popover>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
                 onClick={() => {
                   const now = new Date();
                   setTimestamp(now);
                 }}
-                className="h-5 w-5 cursor-pointer text-muted-foreground hover:text-secondary"
-              />
+              >
+                <Clock className="h-4 w-4" />
+              </Button>
             </div>
           </div>
 
