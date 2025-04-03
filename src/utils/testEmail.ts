@@ -36,8 +36,7 @@ export const testEmailFunctionality = async (): Promise<{ success: boolean; mess
     const result = await sendEmail({
       to: businessEmail,
       subject: testSubject,
-      body: testBody,
-      html: testBody
+      body: testBody
     });
     
     console.log("Test message result:", result);
