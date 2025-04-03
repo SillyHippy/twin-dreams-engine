@@ -1,13 +1,14 @@
+
 import { Client, Account, Databases, Storage, ID, Query, Teams, Functions } from 'appwrite';
 import { APPWRITE_CONFIG } from '@/config/backendConfig';
 
 // Initialize Appwrite client
 const client = new Client();
 
+// Configure the client with endpoint and project ID only (removing setKey)
 client
   .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT || APPWRITE_CONFIG.endpoint)
-  .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID || APPWRITE_CONFIG.projectId)
-  .setKey(import.meta.env.VITE_APPWRITE_API_KEY || APPWRITE_CONFIG.apiKey || '');
+  .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID || APPWRITE_CONFIG.projectId);
 
 // Initialize Appwrite services
 const account = new Account(client);

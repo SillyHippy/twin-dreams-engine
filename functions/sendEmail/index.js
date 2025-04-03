@@ -34,23 +34,38 @@ module.exports = async function(context) {
       message.content.attachments = messageData.attachments;
     }
     
-    // Send message using Appwrite SDK (available in the context)
+    // Create the topic if it doesn't exist (with better error handling)
     const messaging = context.appwrite.messaging;
     
-    // Create subscriber first (this step is crucial)
-    await messaging.createSubscriber(topicId, messageData.to, 'email');
+    try {
+      // First check if the subscriber already exists to avoid duplicate errors
+      await messaging.createSubscriber(topicId, messageData.to, 'email');
+    } catch (subscriberError) {
+      // If error is not about duplicate subscriber, log it but continue
+      if (!subscriberError.message?.includes('already exists')) {
+        context.log(`Subscriber creation warning (continuing): ${subscriberError.message}`);
+      }
+    }
     
-    // Send message to the subscriber
-    const result = await messaging.createMessage(topicId, message);
-    
-    // Return success response
-    return res.json({
-      success: true,
-      message: "Email sent successfully",
-      data: result
-    });
+    // Send message
+    try {
+      const result = await messaging.createMessage(topicId, message);
+      
+      // Return success response
+      return res.json({
+        success: true,
+        message: "Email sent successfully",
+        data: result
+      });
+    } catch (messageError) {
+      context.error(`Error creating message: ${messageError.message}`);
+      return res.json({
+        success: false,
+        message: `Failed to create message: ${messageError.message}`
+      }, 500);
+    }
   } catch (err) {
-    context.error(`Error sending email: ${err.message}`);
+    context.error(`Error in sendEmail function: ${err.message}`);
     return res.json({
       success: false,
       message: `Failed to send email: ${err.message}`,
