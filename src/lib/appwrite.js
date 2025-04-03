@@ -1,3 +1,4 @@
+
 import { Client, Account, Databases, Storage, ID, Query, Teams, Functions } from 'appwrite';
 import { APPWRITE_CONFIG } from '@/config/backendConfig';
 
@@ -37,6 +38,69 @@ export const appwrite = {
   CASES_COLLECTION_ID,
   DOCUMENTS_COLLECTION_ID,
   STORAGE_BUCKET_ID,
+
+  // Add messaging functionality for SMTP integration
+  async sendMessage(payload, providerId, topicId) {
+    try {
+      console.log(`Sending message via Appwrite messaging with provider ${providerId} and topic ${topicId}`);
+      console.log("Message payload:", {
+        subject: payload.subject,
+        recipients: payload.recipients,
+        hasImageData: !!payload.imageData,
+      });
+
+      // Direct HTTP API call for messaging (since SDK might not support it yet)
+      const endpoint = `${client.config.endpoint}/messaging/topics/${topicId}/subscribers`;
+      
+      const headers = {
+        'Content-Type': 'application/json',
+        'X-Appwrite-Project': client.config.project,
+        // Add authentication header if needed
+        'X-Appwrite-Key': client.config.key, // Only if running server-side
+      };
+      
+      // Create the message data
+      const messageData = {
+        userId: 'unique',
+        providerId: providerId,
+        providerType: 'smtp',
+        targetId: payload.recipients,
+        content: {
+          subject: payload.subject,
+          html: payload.content,
+        },
+        metadata: payload.metadata,
+      };
+      
+      // If we have an image, add it to the message
+      if (payload.imageData) {
+        messageData.content.attachments = [{
+          content: payload.imageData,
+          filename: 'serve_evidence.jpeg',
+          disposition: 'attachment'
+        }];
+      }
+      
+      // Make the API request
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(messageData),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Failed to send message: ${errorData.message || response.statusText}`);
+      }
+      
+      const result = await response.json();
+      console.log("Message sent successfully:", result);
+      return result;
+    } catch (error) {
+      console.error("Error sending message:", error);
+      throw error;
+    }
+  },
 
   // Add the setupRealtimeSubscription function
   setupRealtimeSubscription(callback) {

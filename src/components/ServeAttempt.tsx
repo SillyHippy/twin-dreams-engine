@@ -40,7 +40,7 @@ export interface ServeAttemptData {
   id?: string;
   clientId: string;
   clientName?: string;
-  clientEmail?: string; // Added client email field
+  clientEmail?: string;
   imageData: string;
   coordinates: GeolocationCoordinates | string;
   notes: string;
@@ -49,7 +49,7 @@ export interface ServeAttemptData {
   attemptNumber: number;
   caseNumber?: string;
   caseName?: string;
-  address?: string; // Added address field
+  address?: string;
 }
 
 interface ServeAttemptProps {
@@ -310,7 +310,7 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
       const serveData: ServeAttemptData = {
         clientId: selectedClient.id,
         clientName: selectedClient.name,
-        clientEmail: clientEmail, // This will be used only locally, not sent to Appwrite
+        clientEmail: clientEmail,
         caseNumber: selectedCase.caseNumber,
         caseName: selectedCase.caseName || "Unknown Case",
         imageData: imageWithGPS,
@@ -329,11 +329,11 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
         throw new Error("Failed to save serve attempt.");
       }
 
-      // Now send the email notification directly here
+      // Now send the message notification directly here
       try {
-        console.log("Preparing to send notification email with image");
+        console.log("Preparing to send notification message with image");
         
-        // Create email body without embedding the image
+        // Create message body without embedding the image
         const emailBody = createServeEmailBody(
           serveData.clientName || "Unknown Client",
           address,
@@ -352,22 +352,22 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
           recipients.push(clientEmail);
         }
         
-        console.log(`Sending email to ${recipients.length} recipients with photo attachment`);
+        console.log(`Sending message to ${recipients.length} recipients with photo attachment`);
         
-        // Include the image as an attachment using new approach
+        // Include the image as an attachment 
         const emailResult = await sendEmail({
           to: recipients,
           subject: `New Serve Attempt Created - ${serveData.caseNumber || "Unknown Case"}`,
           body: emailBody,
           html: emailBody,
-          imageData: imageWithGPS, // Will be uploaded to storage
+          imageData: imageWithGPS,
           imageFormat: 'jpeg'
         });
         
-        console.log("Email sending result:", emailResult);
-      } catch (emailError) {
-        console.error("Error sending notification email:", emailError);
-        // Continue with success even if email fails
+        console.log("Message sending result:", emailResult);
+      } catch (messageError) {
+        console.error("Error sending notification message:", messageError);
+        // Continue with success even if message fails
       }
 
       await appwrite.syncAppwriteServesToLocal();

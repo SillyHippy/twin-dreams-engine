@@ -1,6 +1,6 @@
 
 import { ServeAttemptData } from "@/components/ServeAttempt";
-import { ID } from "appwrite";
+import { appwrite } from "@/lib/appwrite";
 
 // Base email interface
 export interface EmailData {
@@ -108,58 +108,76 @@ export const createDeleteNotificationEmail = (
   `;
 };
 
-// Function to send email
+// Constants for Appwrite messaging
+const PROVIDER_ID = "67ee09ff00384f10d275";
+const TOPIC_ID = "67edfd2d000a20397825";
+
+// Function to send email through Appwrite messaging
 export async function sendEmail(emailData: EmailData): Promise<{ success: boolean; message: string }> {
   try {
-    console.log("Sending email:", {
+    console.log("Sending message via Appwrite:", {
       to: emailData.to,
       subject: emailData.subject,
       hasImage: !!emailData.imageData
     });
 
-    // Check if we have image data that starts with a data URL
-    if (emailData.imageData && emailData.imageData.startsWith('data:image')) {
-      console.log("Processing image data URL...");
-      // Extract the base64 part from the data URL
-      const matches = emailData.imageData.match(/^data:image\/(png|jpeg|jpg|gif);base64,(.+)$/);
-      
-      if (matches && matches.length === 3) {
-        const imageFormat = matches[1];
-        const base64Data = matches[2];
-        
-        console.log(`Image format detected: ${imageFormat}`);
-        console.log(`Base64 data length: ${base64Data.length}`);
-        
-        // Update the emailData with the extracted base64 data
-        emailData.imageData = base64Data;
-        emailData.imageFormat = imageFormat;
-      } else {
-        console.warn("Image data URL is not in the expected format");
-      }
+    // Create metadata object
+    const metadata: any = { 
+      hasImage: !!emailData.imageData,
+      hasCoordinates: emailData.body.includes("View on Google Maps"),
+      timestamp: new Date().toISOString()
+    };
+    
+    // Add image length if available
+    if (emailData.imageData) {
+      metadata.imageLength = emailData.imageData.length;
+    }
+    
+    // Add coordinates if available
+    if (metadata.hasCoordinates) {
+      metadata.coordinates = emailData.body.match(/https:\/\/www\.google\.com\/maps\?q=([^"]+)/)?.[1] || null;
     }
 
-    // Send to our API endpoint
-    const response = await fetch('/api/email/send', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(emailData),
-    });
-
-    const data = await response.json();
-    console.log("Email sending response:", data);
-
-    if (!response.ok) {
-      throw new Error(data.message || 'Failed to send email');
+    // Format recipients for proper representation in message
+    let recipients: string[] = Array.isArray(emailData.to) ? emailData.to : [emailData.to];
+    
+    // Ensure we have email addresses
+    if (recipients.length === 0) {
+      throw new Error("No recipients specified for email");
+    }
+    
+    // Add the business email if not already in the list
+    const businessEmail = "info@justlegalsolutions.org";
+    if (!recipients.includes(businessEmail)) {
+      recipients.push(businessEmail);
     }
 
-    return { success: true, message: 'Email sent successfully' };
+    // Convert the recipients to a string for the message
+    const recipientsString = recipients.join(", ");
+
+    // Create message payload
+    const messagePayload = {
+      subject: emailData.subject,
+      content: emailData.html || emailData.body,
+      recipients: recipientsString,
+      imageData: emailData.imageData || null,
+      metadata: JSON.stringify(metadata)
+    };
+
+    // Send the message using Appwrite messaging
+    const response = await appwrite.sendMessage(messagePayload, PROVIDER_ID, TOPIC_ID);
+    
+    if (!response) {
+      throw new Error("Failed to send message through Appwrite");
+    }
+
+    console.log("Message sent successfully:", response);
+    return { success: true, message: 'Message sent successfully' };
   } catch (error) {
-    console.error('Error sending email:', error);
+    console.error('Error sending message:', error);
     return { 
       success: false, 
-      message: error instanceof Error ? error.message : 'Unknown error sending email' 
+      message: error instanceof Error ? error.message : 'Unknown error sending message' 
     };
   }
 }
