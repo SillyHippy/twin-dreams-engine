@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
@@ -8,6 +8,7 @@ import Clients from './pages/Clients';
 import History from './pages/History';
 import Settings from './pages/Settings';
 import Index from './pages/Index';
+import LoginPage from './pages/LoginPage';
 import MigrationPage from './pages/Migration';
 import DataExport from './pages/DataExport';
 import { ServeAttemptData } from './components/ServeAttempt';
@@ -82,6 +83,20 @@ const queryClient = new QueryClient({
     }
   }
 });
+
+// Create a protected route wrapper component
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const isAuthenticated = localStorage.getItem("serve-tracker-auth") === "authenticated";
+  const navigate = useNavigate();
+  
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login');
+    }
+  }, [isAuthenticated, navigate]);
+
+  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
+};
 
 const AnimatedRoutes = () => {
   const location = useLocation();
@@ -640,7 +655,13 @@ const AnimatedRoutes = () => {
         </Alert>
       )}
       <Routes location={location}>
-        <Route element={<Layout />}>
+        <Route path="/login" element={<LoginPage />} />
+        
+        <Route element={
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        }>
           <Route path="/" element={<Dashboard clients={clients} serves={serves} />} />
           <Route path="/dashboard" element={
             <Dashboard clients={clients} serves={serves} />
