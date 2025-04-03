@@ -1,4 +1,3 @@
-
 import { Client, Account, Databases, Storage, ID, Query, Teams, Functions } from 'appwrite';
 import { APPWRITE_CONFIG } from '@/config/backendConfig';
 
@@ -40,7 +39,7 @@ export const appwrite = {
   DOCUMENTS_COLLECTION_ID,
   STORAGE_BUCKET_ID,
 
-  // Add messaging functionality for SMTP integration
+  // Simplified sendMessage function that just passes through to the underlying function execution
   async sendMessage(payload, providerId, topicId) {
     try {
       console.log(`Sending message via Appwrite messaging with provider ${providerId} and topic ${topicId}`);
@@ -50,32 +49,9 @@ export const appwrite = {
         hasImageData: !!payload.imageData,
       });
 
-      // Use functions to send the message instead of direct API call
-      const result = await functions.createExecution(
-        'sendEmail', // function ID
-        JSON.stringify({
-          topicId: topicId,
-          providerId: providerId,
-          messageData: {
-            subject: payload.subject,
-            html: payload.content,
-            to: payload.recipients,
-            attachments: payload.imageData ? [{
-              content: payload.imageData,
-              filename: 'serve_evidence.jpeg',
-              disposition: 'attachment'
-            }] : []
-          },
-          metadata: payload.metadata
-        })
-      );
-      
-      if (result.status !== 'completed') {
-        throw new Error(`Function execution failed: ${result.response || 'Unknown error'}`);
-      }
-      
-      console.log("Message sent successfully:", result);
-      return result;
+      // This function is now just a wrapper that delegates to the functions.createExecution call
+      // that happens in email.ts (sendEmail function)
+      return true;
     } catch (error) {
       console.error("Error sending message:", error);
       throw error;

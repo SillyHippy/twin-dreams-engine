@@ -107,14 +107,15 @@ export const createDeleteNotificationEmail = (
   `;
 };
 
-// Constants for Appwrite messaging
-const PROVIDER_ID = "67ee09ff00384f10d275";
-const TOPIC_ID = "67edfd2d000a20397825";
+// Updated constants for Appwrite messaging
+const PROVIDER_ID = "67ee09ff00384f10d275"; // From your Appwrite dashboard
+const TOPIC_ID = "67edfd2d000a20397825"; // From your Appwrite dashboard
+const EMAIL_FUNCTION_ID = "sendEmail"; // Function ID for sending emails
 
-// Function to send email through Appwrite messaging
+// Function to send email through Appwrite function
 export async function sendEmail(emailData: EmailData): Promise<{ success: boolean; message: string }> {
   try {
-    console.log("Sending message via Appwrite:", {
+    console.log("Sending message via Appwrite function:", {
       to: emailData.to,
       subject: emailData.subject,
       hasImage: !!emailData.imageData
@@ -155,22 +156,39 @@ export async function sendEmail(emailData: EmailData): Promise<{ success: boolea
 
     // Create message payload
     const messagePayload = {
-      subject: emailData.subject,
-      content: emailData.html || emailData.body,
-      recipients: recipientsString,
-      imageData: emailData.imageData || null,
-      metadata: JSON.stringify(metadata)
+      topicId: TOPIC_ID,
+      providerId: PROVIDER_ID,
+      messageData: {
+        to: recipientsString,
+        subject: emailData.subject,
+        text: emailData.body,
+        html: emailData.html || emailData.body,
+        attachments: emailData.imageData ? [{
+          content: emailData.imageData,
+          filename: 'serve_evidence.jpeg',
+          disposition: 'attachment'
+        }] : []
+      },
+      metadata: metadata
     };
 
-    // Send the message using Appwrite messaging
-    const response = await appwrite.sendMessage(messagePayload, PROVIDER_ID, TOPIC_ID);
-    
-    if (!response) {
-      throw new Error("Failed to send message through Appwrite");
+    // Call the Appwrite function to send the email
+    const result = await appwrite.functions.createExecution(
+      EMAIL_FUNCTION_ID,
+      JSON.stringify(messagePayload)
+    );
+
+    // Check function execution status
+    if (result.status !== 'completed') {
+      throw new Error(`Function execution failed: ${result.response || 'Unknown error'}`);
     }
 
-    console.log("Message sent successfully:", response);
-    return { success: true, message: 'Message sent successfully' };
+    console.log("Email function execution result:", result);
+    
+    return { 
+      success: true, 
+      message: 'Message sent successfully' 
+    };
   } catch (error) {
     console.error('Error sending message:', error);
     return { 
