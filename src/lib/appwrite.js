@@ -1,4 +1,3 @@
-
 import { Client, Account, Databases, Storage, ID, Query, Teams, Functions } from 'appwrite';
 import { APPWRITE_CONFIG } from '@/config/backendConfig';
 
@@ -7,7 +6,8 @@ const client = new Client();
 
 client
   .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT || APPWRITE_CONFIG.endpoint)
-  .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID || APPWRITE_CONFIG.projectId);
+  .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID || APPWRITE_CONFIG.projectId)
+  .setKey(import.meta.env.VITE_APPWRITE_API_KEY || APPWRITE_CONFIG.apiKey || '');
 
 // Initialize Appwrite services
 const account = new Account(client);
@@ -49,51 +49,30 @@ export const appwrite = {
         hasImageData: !!payload.imageData,
       });
 
-      // Direct HTTP API call for messaging (since SDK might not support it yet)
-      const endpoint = `${client.config.endpoint}/messaging/topics/${topicId}/subscribers`;
+      // Use functions to send the message instead of direct API call
+      const result = await functions.createExecution(
+        'sendEmail', // function ID
+        JSON.stringify({
+          topicId: topicId,
+          providerId: providerId,
+          messageData: {
+            subject: payload.subject,
+            html: payload.content,
+            to: payload.recipients,
+            attachments: payload.imageData ? [{
+              content: payload.imageData,
+              filename: 'serve_evidence.jpeg',
+              disposition: 'attachment'
+            }] : []
+          },
+          metadata: payload.metadata
+        })
+      );
       
-      const headers = {
-        'Content-Type': 'application/json',
-        'X-Appwrite-Project': client.config.project,
-        // Add authentication header if needed
-        'X-Appwrite-Key': client.config.key, // Only if running server-side
-      };
-      
-      // Create the message data
-      const messageData = {
-        userId: 'unique',
-        providerId: providerId,
-        providerType: 'smtp',
-        targetId: payload.recipients,
-        content: {
-          subject: payload.subject,
-          html: payload.content,
-        },
-        metadata: payload.metadata,
-      };
-      
-      // If we have an image, add it to the message
-      if (payload.imageData) {
-        messageData.content.attachments = [{
-          content: payload.imageData,
-          filename: 'serve_evidence.jpeg',
-          disposition: 'attachment'
-        }];
+      if (result.status !== 'completed') {
+        throw new Error(`Function execution failed: ${result.response || 'Unknown error'}`);
       }
       
-      // Make the API request
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify(messageData),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Failed to send message: ${errorData.message || response.statusText}`);
-      }
-      
-      const result = await response.json();
       console.log("Message sent successfully:", result);
       return result;
     } catch (error) {

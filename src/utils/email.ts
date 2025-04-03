@@ -1,4 +1,3 @@
-
 import { ServeAttemptData } from "@/components/ServeAttempt";
 import { appwrite } from "@/lib/appwrite";
 
@@ -121,19 +120,18 @@ export async function sendEmail(emailData: EmailData): Promise<{ success: boolea
       hasImage: !!emailData.imageData
     });
 
-    // Create metadata object
-    const metadata: any = { 
+    // Create complete metadata object at once with explicit typing
+    const metadata: Record<string, any> = {
       hasImage: !!emailData.imageData,
       hasCoordinates: emailData.body.includes("View on Google Maps"),
       timestamp: new Date().toISOString()
     };
     
-    // Add image length if available
+    // Add additional properties to metadata if available
     if (emailData.imageData) {
       metadata.imageLength = emailData.imageData.length;
     }
     
-    // Add coordinates if available
     if (metadata.hasCoordinates) {
       metadata.coordinates = emailData.body.match(/https:\/\/www\.google\.com\/maps\?q=([^"]+)/)?.[1] || null;
     }
